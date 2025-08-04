@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elasticsearch AI Chat</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            gap: 30px;
+            min-height: 600px;
+        }
+
+        .chat-area {
+            flex: 2;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            min-height: 300px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+
+        .input-form {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            resize: vertical;
+        }
+
+        .input-group input:focus, .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .sidebar {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy { background-color: #4CAF50; }
+        .status-unhealthy { background-color: #f44336; }
+        .status-degraded { background-color: #ff9800; }
+
+        .query-display {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #f44336;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                order: -1;
+            }
+            
+            .input-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .send-button {
+                align-self: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [messages, setMessages] = useState([]);
+            const [inputMessage, setInputMessage] = useState('');
+            const [indexName, setIndexName] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [health, setHealth] = useState(null);
+            const [lastQuery, setLastQuery] = useState(null);
+            const [error, setError] = useState('');
+            const messagesEndRef = useRef(null);
+
+            const scrollToBottom = () => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            };
+
+            useEffect(() => {
+                scrollToBottom();
+            }, [messages]);
+
+            useEffect(() => {
+                fetchHealth();
+                const interval = setInterval(fetchHealth, 30000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const fetchHealth = async () => {
+                try {
+                    const response = await fetch('/health');
+                    const data = await response.json();
+                    setHealth(data);
+                } catch (error) {
+                    console.error('Health check failed:', error);
+                }
+            };
+
+            const sendMessage = async (e) => {
+                e.preventDefault();
+                if (!inputMessage.trim() || !indexName.trim() || isLoading) return;
+
+                const userMessage = { role: 'user', content: inputMessage };
+                setMessages(prev => [...prev, userMessage]);
+                setIsLoading(true);
+                setError('');
+
+                try {
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: inputMessage,
+                            index_name: indexName
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Request failed');
+                    }
+
+                    const data = await response.json();
+                    
+                    const assistantMessage = {
+                        role: 'assistant',
+                        content: data.response,
+                        query: data.elasticsearch_query,
+                        resultsCount: data.results_count
+                    };
+
+                    setMessages(prev => [...prev, assistantMessage]);
+                    setLastQuery(data.elasticsearch_query);
+                    setInputMessage('');
+                } catch (error) {
+                    setError(error.message);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: `Error: ${error.message}`,
+                        isError: true
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const getStatusColor = (status) => {
+                switch (status) {
+                    case 'healthy': return 'status-healthy';
+                    case 'unhealthy': return 'status-unhealthy';
+                    case 'degraded': return 'status-degraded';
+                    default: return 'status-unhealthy';
+                }
+            };
+
+            return (
+                <div className="app">
+                    <div className="header">
+                        <h1>Elasticsearch AI Chat</h1>
+                        <p>Ask questions about your data using natural language</p>
+                    </div>
+
+                    <div className="chat-container">
+                        <div className="chat-area">
+                            <div className="messages">
+                                {messages.length === 0 && (
+                                    <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>
+                                        <h3>Welcome to Elasticsearch AI Chat!</h3>
+                                        <p>Enter an index name and ask questions about your data.</p>
+                                        <p>Example: "Show me recent orders" or "Find users from California"</p>
+                                    </div>
+                                )}
+                                
+                                {messages.map((message, index) => (
+                                    <div key={index} className={`message ${message.role}`}>
+                                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                                            {message.content}
+                                        </div>
+                                        {message.query && (
+                                            <details style={{ marginTop: '10px' }}>
+                                                <summary style={{ cursor: 'pointer', color: '#666' }}>
+                                                    View Elasticsearch Query
+                                                </summary>
+                                                <pre style={{ marginTop: '10px', fontSize: '0.8rem' }}>
+                                                    {JSON.stringify(message.query, null, 2)}
+                                                </pre>
+                                            </details>
+                                        )}
+                                    </div>
+                                ))}
+                                
+                                {isLoading && (
+                                    <div className="loading">
+                                        <div>Generating query and searching...</div>
+                                    </div>
+                                )}
+                                
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {error && (
+                                <div className="error">
+                                    {error}
+                                </div>
+                            )}
+
+                            <form className="input-form" onSubmit={sendMessage}>
+                                <div className="input-group" style={{ flex: '0 0 200px' }}>
+                                    <label>Index Name</label>
+                                    <input
+                                        type="text"
+                                        value={indexName}
+                                        onChange={(e) => setIndexName(e.target.value)}
+                                        placeholder="e.g., orders, users, logs"
+                                        disabled={isLoading}
+                                    />
+                                </div>
+                                
+                                <div className="input-group">
+                                    <label>Your Question</label>
+                                    <textarea
+                                        value={inputMessage}
+                                        onChange={(e) => setInputMessage(e.target.value)}
+                                        placeholder="Ask a question about your data..."
+                                        rows="3"
+                                        disabled={isLoading}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                sendMessage(e);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                
+                                <button 
+                                    type="submit" 
+                                    className="send-button"
+                                    disabled={isLoading || !inputMessage.trim() || !indexName.trim()}
+                                >
+                                    {isLoading ? 'Searching...' : 'Send'}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="sidebar">
+                            <div className="panel">
+                                <h3>System Status</h3>
+                                {health ? (
+                                    <div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <span className={`status-indicator ${getStatusColor(health.status)}`}></span>
+                                            Overall: {health.status}
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <span className={`status-indicator ${getStatusColor(health.elasticsearch)}`}></span>
+                                            Elasticsearch: {health.elasticsearch}
+                                        </div>
+                                        <div>
+                                            <span className="status-indicator status-healthy"></span>
+                                            LLM Provider: {health.llm_provider}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>Loading status...</div>
+                                )}
+                            </div>
+
+                            <div className="panel">
+                                <h3>Last Query</h3>
+                                {lastQuery ? (
+                                    <div className="query-display">
+                                        {JSON.stringify(lastQuery, null, 2)}
+                                    </div>
+                                ) : (
+                                    <div style={{ color: '#666', fontStyle: 'italic' }}>
+                                        No queries executed yet
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="panel">
+                                <h3>Tips</h3>
+                                <ul style={{ paddingLeft: '20px', lineHeight: '1.6' }}>
+                                    <li>Be specific about what you're looking for</li>
+                                    <li>Mention date ranges when relevant</li>
+                                    <li>Use field names if you know them</li>
+                                    <li>Ask for aggregations: "count by category"</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
