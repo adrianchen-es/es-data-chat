@@ -3,11 +3,11 @@
 FROM python:3.11-slim AS base
 
 # System dependencies with cache
+ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
-    apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     python3-dev \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
