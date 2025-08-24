@@ -9,11 +9,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
+      - name: Set up QEMU (optional)
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
@@ -25,7 +27,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME || github.actor }}
           password: ${{ secrets.DOCKERHUB_TOKEN || '' }}
 
-      - name: Build and validate compose (no-start)
+      - name: Build and validate compose (no-start, amd64)
         run: |
-          docker compose -f docker-compose.buildx.yml build --pull --progress=plain
+          # Force amd64-only builds to avoid QEMU/dpkg emulation flakes
+          docker compose -f docker-compose.buildx.yml build --pull --progress=plain --platform linux/amd64
           docker compose -f docker-compose.buildx.yml up --no-start
