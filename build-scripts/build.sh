@@ -3,7 +3,7 @@
 
 # Docker Buildx setup for multi-platform builds with advanced caching
 
-set -euo pipefail
+set -e
 
 # Colors for output
 RED='\033[0;31m'
