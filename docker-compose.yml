@@ -3,7 +3,10 @@ version: '3.8'
 
 services:
   waf:
-    build: ./waf
+    build:
+      context: ./waf
+      dockerfile: Dockerfile
+    container_name: waf
     ports:
       - "3000:80"
       - "8443:443"
@@ -14,14 +17,18 @@ services:
       - ./waf/logs:/var/log
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     environment:
       - REACT_APP_API_URL=http://localhost/api
     depends_on:
       - bff-service
 
   bff-service:
-    build: ./bff-service
+    build:
+      context: ./bff-service
+      dockerfile: Dockerfile
     environment:
       - AUTH_SERVICE_URL=http://auth-service:8003
       - AI_SERVICE_URL=http://ai-service:8000
@@ -35,7 +42,9 @@ services:
       - cache-service
 
   auth-service:
-    build: ./auth-service
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
     ports:
       - "8003:8003"
     environment:
@@ -48,7 +57,9 @@ services:
       - keycloak
 
   ai-service:
-    build: ./ai-service
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -67,7 +78,9 @@ services:
       - vector-service
 
   document-service:
-    build: ./document-service
+    build:
+      context: ./document-service
+      dockerfile: Dockerfile
     ports:
       - "8001:8001"
     environment:
@@ -81,7 +94,9 @@ services:
       - doc_uploads:/tmp/uploads
 
   vector-service:
-    build: ./vector-service
+    build:
+      context: ./vector-service
+      dockerfile: Dockerfile
     ports:
       - "8004:8004"
     environment:
@@ -92,7 +107,9 @@ services:
       - qdrant
 
   cache-service:
-    build: ./cache-service
+    build:
+      context: ./cache-service
+      dockerfile: Dockerfile
     ports:
       - "8002:8002"
     environment:
@@ -102,7 +119,9 @@ services:
       - redis
 
   security-service:
-    build: ./security-service
+    build:
+      context: ./security-service
+      dockerfile: Dockerfile
     ports:
       - "8005:8005"
     environment:

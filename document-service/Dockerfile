@@ -15,7 +15,7 @@ FROM base AS dependencies
 WORKDIR /app
 
 # Copy requirements and install with cache
-COPY document-service/requirements.txt ./
+COPY requirements.txt ./
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
@@ -25,7 +25,7 @@ FROM dependencies AS build
 WORKDIR /app
 
 # Copy source after dependencies
-COPY document-service/src/ src/
+COPY src/ src/
 
 FROM python:3.12-slim AS runtime
 LABEL org.opencontainers.image.title="Document Processing Service"

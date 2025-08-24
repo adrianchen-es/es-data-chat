@@ -15,11 +15,11 @@ FROM base AS config
 WORKDIR /etc/nginx
 
 # Copy custom nginx configuration
-COPY waf/nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy ModSecurity configuration
-COPY waf/modsecurity.conf /etc/modsecurity/modsecurity.conf
-COPY waf/custom-rules.conf /etc/modsecurity/custom-rules.conf
+COPY modsecurity.conf /etc/modsecurity/modsecurity.conf
+COPY custom-rules.conf /etc/modsecurity/custom-rules.conf
 
 # Create directories for logs and SSL
 RUN mkdir -p /var/log/nginx /var/log/modsec /etc/ssl/certs /etc/ssl/private && \

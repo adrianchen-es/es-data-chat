@@ -33,14 +33,13 @@ services:
 
   ai-service:
     build:
-      context: ./ai-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ai-service/Dockerfile
       <<: *build-config
       target: runtime
       args:
         BUILDKIT_INLINE_CACHE: 1
     depends_on:
-      - elasticsearch
       - vector-service
 
   document-service:
@@ -50,8 +49,8 @@ services:
       <<: *build-config
       args:
         BUILDKIT_INLINE_CACHE: 1
-    depends_on:
-      - elasticsearch
+    # depends_on:
+    #   - elasticsearch
 
   vector-service:
     build:

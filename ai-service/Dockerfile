@@ -2,9 +2,10 @@
 # syntax=docker/dockerfile:1.6
 FROM python:3.12-slim AS base
 
-# System dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# System dependencies with cache
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && apt-get install -y \
     gcc \
     g++ \
     python3-dev \

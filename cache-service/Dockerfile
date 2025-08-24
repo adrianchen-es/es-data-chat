@@ -18,7 +18,8 @@ FROM base AS dependencies
 WORKDIR /app
 
 # Copy and install Python requirements with caching
-COPY cache-service/requirements.txt ./
+# Copy and install Python requirements with caching
+COPY requirements.txt ./
 
 # Install python build tools (separate layer)
 RUN apt-get update && apt-get install -y --no-install-recommends python3-setuptools python3-wheel && rm -rf /var/lib/apt/lists/*
@@ -31,7 +32,8 @@ FROM dependencies AS build
 WORKDIR /app
 
 # Copy source after dependencies
-COPY cache-service/src/ src/
+# Copy source after dependencies
+COPY src/ src/
 
 FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="Cache Service"

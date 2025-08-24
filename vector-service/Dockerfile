@@ -15,7 +15,8 @@ FROM base AS dependencies
 WORKDIR /app
 
 # Copy requirements first to leverage layer caching
-COPY vector-service/requirements.txt ./
+# Copy requirements first to leverage layer caching
+COPY requirements.txt ./
 
 # Install python build tooling
 RUN apt-get update && apt-get install -y --no-install-recommends python3-setuptools python3-wheel && rm -rf /var/lib/apt/lists/*
@@ -28,7 +29,7 @@ FROM dependencies AS build
 WORKDIR /app
 
 # Copy source after installing dependencies
-COPY vector-service/src/ src/
+COPY src/ src/
 
 FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="Vector Database Service"

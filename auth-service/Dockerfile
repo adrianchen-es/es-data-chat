@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 FROM base AS dependencies
 
 # Copy requirements first to maximize cache reuse
-COPY auth-service/requirements.txt ./
+COPY requirements.txt ./
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
@@ -24,7 +24,7 @@ FROM dependencies AS build
 WORKDIR /app
 
 # Copy source after installing dependencies
-COPY auth-service/src/ src/
+COPY src/ src/
 
 FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="Authentication Service"

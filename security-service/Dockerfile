@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 FROM base AS dependencies
 
 # Copy requirements and install (cache pip downloads and ensure build tools present)
-COPY security-service/requirements.txt ./
+COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.description="Data exfiltration prevention and thr
 RUN adduser --disabled-password --gecos '' securityuser
 
 # Copy source code
-COPY --chown=securityuser:securityuser security-service/src/ src/
+COPY --chown=securityuser:securityuser src/ src/
 
 USER securityuser
 
