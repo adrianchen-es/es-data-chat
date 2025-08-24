@@ -1,0 +1,138 @@
+# docker-compose.buildx.yml
+version: '3.8'
+
+x-build-config: &build-config
+  platforms:
+    - linux/amd64
+    - linux/arm64
+  cache_from:
+    - type=gha
+  cache_to:
+    - type=gha,mode=max
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      <<: *build-config
+      target: runtime
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    environment:
+      - REACT_APP_API_URL=http://localhost/api
+
+  bff-service:
+    build:
+      context: ./bff-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - ai-service
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      target: runtime
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - elasticsearch
+      - vector-service
+
+  document-service:
+    build:
+      context: ./document-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - elasticsearch
+
+  vector-service:
+    build:
+      context: ./vector-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - qdrant
+
+  cache-service:
+    build:
+      context: ./cache-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - redis
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    depends_on:
+      - keycloak
+
+  waf:
+    build:
+      context: ./waf
+      dockerfile: Dockerfile
+      <<: *build-config
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - bff-service
+
+  # Infrastructure services (unchanged)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      - KC_DB=postgres
+    depends_on:
+      - keycloak-db
+
+  keycloak-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
+
+volumes:
+  es_data:
+  qdrant_data:
+  keycloak_db_data:

@@ -1,94 +1,189 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
-  app:
-    build: .
+  waf:
+    build: ./waf
     ports:
-      - "8000:8000"
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - bff-service
+    volumes:
+      - ./waf/logs:/var/log
+
+  frontend:
+    build: ./frontend
     environment:
-      # Elasticsearch Configuration
-      - ELASTICSEARCH_HOST=elasticsearch:9200
-      - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
-      
-      # LLM Provider Configuration
-      - LLM_PROVIDER=${LLM_PROVIDER:-azure}
-      
-      # Azure OpenAI Configuration (if using Azure)
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-gpt-4}
-      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
-      
-      # OpenAI Configuration (if using OpenAI)
+      - REACT_APP_API_URL=http://localhost/api
+    depends_on:
+      - bff-service
+
+  bff-service:
+    build: ./bff-service
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8003
+      - AI_SERVICE_URL=http://ai-service:8000
+      - DOC_SERVICE_URL=http://document-service:8001
+      - CACHE_SERVICE_URL=http://cache-service:8002
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - auth-service
+      - ai-service
+      - document-service
+      - cache-service
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8003:8003"
+    environment:
+      - KEYCLOAK_SERVER_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=ai-chat
+      - KEYCLOAK_CLIENT_ID=ai-chat-client
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - keycloak
+
+  ai-service:
+    build: ./ai-service
+    environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
-      
-      # OpenTelemetry Configuration
-      - OTEL_SERVICE_NAME=elasticsearch-ai-chat
-      - OTEL_SERVICE_VERSION=1.0.0
-      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://jaeger:14250}
-      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://jaeger:14250}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_DEPLOYMENT_NAME=${AZURE_DEPLOYMENT_NAME:-gpt-4}
+      - AZURE_DEPLOYMENT_NAME_35=${AZURE_DEPLOYMENT_NAME_35:-gpt-35-turbo}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
+      - ELASTICSEARCH_VERIFY_CERTS=false
+      - VECTOR_SERVICE_URL=http://vector-service:8004
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       - elasticsearch
-      - jaeger
-    networks:
-      - app-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - vector-service
+
+  document-service:
+    build: ./document-service
+    ports:
+      - "8001:8001"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
+      - ELASTICSEARCH_VERIFY_CERTS=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - elasticsearch
+    volumes:
+      - doc_uploads:/tmp/uploads
+
+  vector-service:
+    build: ./vector-service
+    ports:
+      - "8004:8004"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - qdrant
+
+  cache-service:
+    build: ./cache-service
+    ports:
+      - "8002:8002"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - redis
+
+  security-service:
+    build: ./security-service
+    ports:
+      - "8005:8005"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - otel-collector
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin123}
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak
+      - KC_DB_USERNAME=keycloak
+      - KC_DB_PASSWORD=keycloak
+    command: start-dev
+    depends_on:
+      - keycloak-db
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
+  keycloak-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=keycloak
+      - POSTGRES_USER=keycloak
+      - POSTGRES_PASSWORD=keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    networks:
-      - app-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - discovery.type=single-node
+      - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-false}
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
     ports:
-      - "5601:5601"
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
+    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
     depends_on:
       - elasticsearch
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.50
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    ports:
-      - "16686:16686"  # Jaeger UI
-      - "14250:14250"  # OTLP gRPC receiver
-      - "4317:4317"    # OTLP gRPC
-      - "4318:4318"    # OTLP HTTP
-    networks:
-      - app-network
-    restart: unless-stopped
 
 volumes:
-  elasticsearch_data:
-    driver: local
-
-networks:
-  app-network:
-    driver: bridge
+  es_data:
+  qdrant_data:
+  redis_data:
+  doc_uploads:
+  keycloak_data:
+  keycloak_db_data:

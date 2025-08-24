@@ -1,0 +1,78 @@
+# docker-compose.dev.yml
+# Override for development with volume mounts and debug settings
+version: '3.8'
+
+services:
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_DEBUG=true
+
+  bff-service:
+    volumes:
+      - ./bff-service/src:/app/src
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+
+  ai-service:
+    volumes:
+      - ./ai-service/src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  document-service:
+    volumes:
+      - ./document-service/src:/app/src
+      - ./document-service/uploads:/tmp/uploads
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  cache-service:
+    volumes:
+      - ./cache-service/src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  vector-service:
+    volumes:
+      - ./vector-service/src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  auth-service:
+    volumes:
+      - ./auth-service/src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  security-service:
+    volumes:
+      - ./security-service/src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+
+  # Development utilities
+  redis-cli:
+    image: redis:7-alpine
+    depends_on:
+      - redis
+    command: redis-cli -h redis
+    profiles: ["debug"]
+
+  elasticsearch-dev:
+    extends:
+      service: elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"  # Reduced for development
