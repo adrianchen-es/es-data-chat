@@ -1,12 +1,12 @@
 # security-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-alpine AS base
 
 WORKDIR /app
 
 # Install dependencies with cache
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip
+    pip install --no-cache-dir --upgrade pip
 
 FROM base AS dependencies
 

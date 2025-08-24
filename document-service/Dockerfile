@@ -1,6 +1,6 @@
 # document-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-alpine AS base
 
 # System dependencies for PyMuPDF and file processing
 RUN --mount=type=cache,target=/var/cache/apt \
@@ -19,7 +19,7 @@ WORKDIR /app
 # Python dependencies with cache
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    pip install --upgrade pip && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
@@ -28,7 +28,7 @@ WORKDIR /app
 # Copy source code
 COPY src/ src/
 
-FROM python:3.11-slim AS runtime
+FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="Document Processing Service"
 LABEL org.opencontainers.image.description="PyMuPDF4LLM document processing with Elasticsearch indexing"
 
