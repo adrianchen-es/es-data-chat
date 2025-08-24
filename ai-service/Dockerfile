@@ -1,6 +1,6 @@
 # ai-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-slim AS base
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
@@ -34,7 +34,7 @@ WORKDIR /app
 COPY ai-service/src/ src/
 COPY shared/ shared/
 
-FROM python:3.11-alpine AS runtime
+FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="AI Chat Service"
 LABEL org.opencontainers.image.description="Multi-model AI service with RAG"
 
@@ -44,7 +44,7 @@ WORKDIR /app
 RUN adduser --disabled-password --gecos '' appuser
 
 # Copy dependencies and source
-COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=build --chown=appuser:appuser /app .
 
 USER appuser

@@ -16,14 +16,33 @@ const fastify = require('fastify')({
 });
 const axios = require('axios');
 
-// OpenTelemetry
+// OpenTelemetry (pinned versions)
 const { NodeTracerProvider } = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
 
 const provider = new NodeTracerProvider({
   instrumentations: [getNodeAutoInstrumentations()]
 });
+
+// Configure OTLP exporter (endpoint via OTEL_EXPORTER_OTLP_ENDPOINT)
+const otlpExporter = new OTLPTraceExporter({
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || undefined
+});
+
+provider.addSpanProcessor(new (require('@opentelemetry/sdk-node').SimpleSpanProcessor)(otlpExporter));
 provider.register();
+
+// Graceful shutdown: flush provider on SIGTERM/SIGINT
+async function shutdownTracing() {
+  try {
+    await provider.shutdown();
+  } catch (err) {
+    fastify.log.error('Error shutting down OTEL provider', err);
+  }
+}
+process.on('SIGTERM', shutdownTracing);
+process.on('SIGINT', shutdownTracing);
 
 // Services
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:8003';

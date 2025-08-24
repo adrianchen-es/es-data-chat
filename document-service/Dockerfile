@@ -1,6 +1,6 @@
 # document-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-slim AS base
 
 # System dependencies for PyMuPDF and file processing
 RUN apt-get update && apt-get install -y \
@@ -27,7 +27,7 @@ WORKDIR /app
 # Copy source after dependencies
 COPY document-service/src/ src/
 
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 LABEL org.opencontainers.image.title="Document Processing Service"
 LABEL org.opencontainers.image.description="PyMuPDF4LLM document processing with Elasticsearch indexing"
 
@@ -47,7 +47,7 @@ RUN mkdir -p /tmp/uploads /tmp/uploads/images && \
     chown -R docuser:docuser /tmp/uploads
 
 # Copy dependencies and source
-COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=build --chown=docuser:docuser /app .
 
 USER docuser

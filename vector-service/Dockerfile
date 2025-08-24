@@ -1,6 +1,6 @@
 # vector-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-slim AS base
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
@@ -30,7 +30,7 @@ WORKDIR /app
 # Copy source after installing dependencies
 COPY vector-service/src/ src/
 
-FROM python:3.11-alpine AS runtime
+FROM python:3.12-alpine AS runtime
 LABEL org.opencontainers.image.title="Vector Database Service"
 LABEL org.opencontainers.image.description="Qdrant vector database service for semantic caching"
 
@@ -40,7 +40,7 @@ WORKDIR /app
 RUN adduser --disabled-password --gecos '' vectoruser
 
 # Copy dependencies and source
-COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=build --chown=vectoruser:vectoruser /app .
 
 USER vectoruser
