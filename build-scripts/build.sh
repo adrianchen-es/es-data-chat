@@ -41,6 +41,13 @@ done
 
 echo -e "${GREEN}🚀 Starting Docker Buildx multi-platform build${NC}"
 
+# Check whether the registry used for caching is reachable. If not, disable remote cache export
+if ! curl -fsS "http://${REGISTRY}/v2/" >/dev/null 2>&1; then
+  echo -e "${YELLOW}Registry ${REGISTRY} not reachable — disabling remote cache export (CACHE_FROM/CACHE_TO will be skipped).${NC}"
+  CACHE_FROM=""
+  CACHE_TO=""
+fi
+
 # Dependency checks
 command -v docker >/dev/null 2>&1 || { echo -e "${RED}docker not found. Install Docker and ensure it's on your PATH.${NC}"; exit 1; }
 if ! docker info >/dev/null 2>&1; then
@@ -74,6 +81,7 @@ build_service() {
   # Determine buildx push/load behavior
   local build_platforms="${PLATFORMS}"
   local extra_flags=()
+  local cache_flags=()
 
   if [ "${PUSH}" = true ]; then
     extra_flags+=("--push")
@@ -88,10 +96,17 @@ build_service() {
     fi
   fi
 
+  # Only add cache flags if configured
+  if [ -n "${CACHE_FROM}" ]; then
+    cache_flags+=("--cache-from" "${CACHE_FROM}-${service}")
+  fi
+  if [ -n "${CACHE_TO}" ]; then
+    cache_flags+=("--cache-to" "${CACHE_TO}-${service}")
+  fi
+
   docker buildx build \
     --platform "${build_platforms}" \
-    --cache-from "${CACHE_FROM}-${service}" \
-    --cache-to "${CACHE_TO}-${service}" \
+    ${cache_flags[@]:+${cache_flags[@]}} \
     --tag "${REGISTRY}/ai-chat-${service}:${VERSION}" \
     --tag "${REGISTRY}/ai-chat-${service}:latest" \
     --file "${service}/Dockerfile" \
@@ -105,8 +120,7 @@ export -f build_service
 export PLATFORMS REGISTRY VERSION CACHE_FROM CACHE_TO GREEN NC RED YELLOW PUSH
 
 echo -e "${YELLOW}🏗️  Building ${#SERVICES[@]} services in parallel${NC}"
-printf '%s
-' "${SERVICES[@]}" | xargs -n1 -P4 -I{} bash -c 'build_service "{}"'
+printf '%s\n' "${SERVICES[@]}" | xargs -P4 -I{} bash -c 'build_service "{}"'
 
 echo -e "${GREEN}✅ All services built successfully${NC}"
 

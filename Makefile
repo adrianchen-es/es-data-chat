@@ -29,7 +29,7 @@ help:
 
 build:
 	@chmod +x build-scripts/build.sh
-	@./build-scripts/build.sh
+	@bash build-scripts/build.sh
 
 buildx:
 	@$(COMPOSE_BUILDX) build --parallel

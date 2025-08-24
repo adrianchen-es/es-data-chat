@@ -3,7 +3,8 @@ import redis.asyncio as redis
 import json
 import hashlib
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import httpx
+from typing import Protocol
 from typing import Optional, Dict, Any
 import time
 import os
@@ -11,11 +12,63 @@ from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
+class EmbeddingProvider(Protocol):
+    def encode(self, text: str) -> np.ndarray:
+        ...
+
+
+class OpenAIEmbeddingProvider:
+    def __init__(self, api_key: str = None, model: str = "text-embedding-3-small"):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.model = model
+
+    def encode(self, text: str) -> np.ndarray:
+        if not self.api_key:
+            raise RuntimeError("OpenAI API key not configured")
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        payload = {"model": self.model, "input": text}
+        resp = httpx.post("https://api.openai.com/v1/embeddings", json=payload, headers=headers, timeout=30.0)
+        resp.raise_for_status()
+        j = resp.json()
+        vec = np.array(j["data"][0]["embedding"], dtype=np.float32)
+        return vec
+
+
+class LocalHashEmbeddingProvider:
+    """A very small, deterministic embedding fallback using n-gram hashing.
+    Not semantically meaningful but useful as a small dependency-free fallback for dev/local use.
+    """
+    def __init__(self, dim: int = 128):
+        self.dim = dim
+
+    def encode(self, text: str) -> np.ndarray:
+        # simple n-gram hashing into fixed-size vector
+        vec = np.zeros(self.dim, dtype=np.float32)
+        s = text.lower()
+        for i in range(len(s)):
+            ngram = s[i:i+3]
+            h = int(hashlib.sha256(ngram.encode()).hexdigest(), 16)
+            idx = h % self.dim
+            vec[idx] += 1.0
+        # normalize
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec /= norm
+        return vec
+
+
 class SemanticCache:
-    def __init__(self, redis_client, model_name="all-MiniLM-L6-v2", threshold=0.85):
+    def __init__(self, redis_client, model_name: str = "all-MiniLM-L6-v2", threshold=0.85, provider: EmbeddingProvider = None):
         self.redis = redis_client
-        self.encoder = SentenceTransformer(model_name)
         self.threshold = threshold
+        # select provider: prefer explicit provider, then OpenAI if key present, else local fallback
+        if provider is not None:
+            self.encoder = provider
+        else:
+            if os.getenv("OPENAI_API_KEY"):
+                self.encoder = OpenAIEmbeddingProvider()
+            else:
+                self.encoder = LocalHashEmbeddingProvider(dim=128)
     
     def _cache_key(self, query: str, context: str = "") -> str:
         """Generate cache key"""
