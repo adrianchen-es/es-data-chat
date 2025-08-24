@@ -66,17 +66,7 @@ fi
 docker buildx use ai-chat-builder
 
 # Services to build
-SERVICES=(
-    "frontend"
-    "bff-service"
-    "auth-service"
-    "ai-service"
-    "document-service"
-    "cache-service"
-    "vector-service"
-    "security-service"
-    "waf"
-)
+SERVICES=("frontend" "bff-service" "auth-service" "ai-service" "document-service" "cache-service" "vector-service" "security-service" "waf")
 
 build_service() {
   local service=$1
