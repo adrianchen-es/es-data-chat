@@ -1,5 +1,4 @@
 # docker-compose.buildx.yml
-version: '3.8'
 
 x-build-config: &build-config
   platforms:
@@ -74,6 +73,11 @@ services:
     depends_on:
       - redis
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
   auth-service:
     build:
       context: ./auth-service
@@ -135,4 +139,5 @@ services:
 volumes:
   es_data:
   qdrant_data:
+  redis_data:
   keycloak_db_data:
