@@ -46,7 +46,7 @@ chmod +x build-scripts/build.sh
 
 # 3. Start services
 # If you have an external Elasticsearch, set EXTERNAL_ELASTICSEARCH_URL so the local ES container is not started
-# Example: EXTERNAL_ELASTICSEARCH_URL=http://es-host:9200 docker-compose up -d
+# Example: EXTERNAL_ELASTICSEARCH_URL=http://es-host:9200 docker compose up -d
 docker-compose up -d
 
 # 4. Access application

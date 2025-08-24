@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
 
 # Compose helpers
-COMPOSE_BUILDX := docker-compose -f docker-compose.buildx.yml
-COMPOSE_DEV := docker-compose -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_BUILDX := docker compose -f docker-compose.buildx.yml
+COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
 .PHONY: help build buildx push up dev-up down logs ps health init-keycloak clean prune
 .PHONY: smoke-ai smoke-all
@@ -76,7 +76,7 @@ down:
 	@docker-compose down
 
 logs:
-	@sh -c 'if [ -n "$(service)" ]; then docker-compose logs -f $(service); else docker-compose logs -f --tail=200; fi'
+	@sh -c 'if [ -n "$(service)" ]; then docker compose logs -f $(service); else docker compose logs -f --tail=200; fi'
 
 ps:
 	@docker-compose ps
