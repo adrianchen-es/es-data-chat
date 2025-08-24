@@ -1,9 +1,9 @@
-# build-scripts/build.sh
 #!/bin/bash
 
+# build-scripts/build.sh
 # Docker Buildx setup for multi-platform builds with advanced caching
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,8 +29,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       echo "Usage: $0 [--push]" >&2
-      echo "  --push    Push built images to \
-$REGISTRY (requires REGISTRY and VERSION)" >&2
+      echo "  --push    Push built images to ${REGISTRY} (requires REGISTRY and VERSION)" >&2
       exit 0
       ;;
     *)
@@ -71,7 +70,7 @@ SERVICES=("frontend" "bff-service" "auth-service" "ai-service" "document-service
 build_service() {
   local service=$1
   echo -e "${GREEN}🔨 Building ${service}...${NC}"
-    
+
   # Determine buildx push/load behavior
   local build_platforms="${PLATFORMS}"
   local extra_flags=()
@@ -96,7 +95,6 @@ build_service() {
     --tag "${REGISTRY}/ai-chat-${service}:${VERSION}" \
     --tag "${REGISTRY}/ai-chat-${service}:latest" \
     --file "${service}/Dockerfile" \
-    --context "${service}" \
     --progress plain \
     "${extra_flags[@]}" \
     "${service}/"
@@ -107,7 +105,8 @@ export -f build_service
 export PLATFORMS REGISTRY VERSION CACHE_FROM CACHE_TO GREEN NC RED YELLOW PUSH
 
 echo -e "${YELLOW}🏗️  Building ${#SERVICES[@]} services in parallel${NC}"
-printf '%s\n' "${SERVICES[@]}" | xargs -n1 -P4 -I{} bash -c 'build_service "{}"'
+printf '%s
+' "${SERVICES[@]}" | xargs -n1 -P4 -I{} bash -c 'build_service "{}"'
 
 echo -e "${GREEN}✅ All services built successfully${NC}"
 

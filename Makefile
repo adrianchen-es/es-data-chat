@@ -5,6 +5,7 @@ COMPOSE_BUILDX := docker-compose -f docker-compose.buildx.yml
 COMPOSE_DEV := docker-compose -f docker-compose.yml -f docker-compose.dev.yml
 
 .PHONY: help build buildx push up dev-up down logs ps health init-keycloak clean prune
+.PHONY: smoke-ai smoke-all
 
 
 help:
@@ -107,3 +108,16 @@ clean:
 
 prune:
 	@docker system prune -af
+
+
+# Smoke tests (quick integration checks that assume services are running)
+smoke-ai:
+	@bash -c '\
+set -euo pipefail; \
+echo "Running AI service smoke tests..."; \
+./scripts/smoke/ai_smoke.sh; \
+echo "AI smoke tests passed."; \
+'
+
+smoke-all: smoke-ai
+	@echo "All smoke tests passed."
