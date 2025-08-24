@@ -27,7 +27,7 @@ WORKDIR /app
 # Copy source after dependencies
 COPY document-service/src/ src/
 
-FROM python:3.11-alpine AS runtime
+FROM python:3.11-slim AS runtime
 LABEL org.opencontainers.image.title="Document Processing Service"
 LABEL org.opencontainers.image.description="PyMuPDF4LLM document processing with Elasticsearch indexing"
 

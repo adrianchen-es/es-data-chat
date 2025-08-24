@@ -3,9 +3,8 @@
   "platforms": "linux/amd64",
   "registry": "localhost:5000",
   "services": {
-    "ai-service": {"image": "localhost:5000/ai-chat-ai-service:latest", "platforms": "linux/amd64"},
-    "cache-service": {"image": "localhost:5000/ai-chat-cache-service:latest", "platforms": "linux/amd64"}
+    "frontend": {"image": "localhost:5000/ai-chat-frontend:latest", "platforms": "linux/amd64"}
   },
-  "built_at": "2025-08-24T10:40:10+00:00",
+  "built_at": "2025-08-24T10:51:53+00:00",
   "cache_enabled": true
 }

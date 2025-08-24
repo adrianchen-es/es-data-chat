@@ -10,9 +10,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 FROM base AS dependencies
 
-# Copy requirements and install
-COPY security-service/requirements.txt .
+# Copy requirements and install (cache pip downloads and ensure build tools present)
+COPY security-service/requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS runtime
