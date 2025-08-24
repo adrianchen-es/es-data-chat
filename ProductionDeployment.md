@@ -39,6 +39,8 @@ export VERSION=1.0.0
 
 ### 3. Deploy Services
 ```bash
+# If you have an external Elasticsearch instance, export it so the compose stack will skip local ES
+# Example: export EXTERNAL_ELASTICSEARCH_URL=http://es-host:9200
 docker-compose -f docker-compose.buildx.yml up -d
 ```
 
@@ -83,8 +85,9 @@ for service in "${services[@]}"; do
   fi
 done
 
-# Infrastructure health
-curl -f http://localhost:9200/_cluster/health || echo "Elasticsearch unhealthy"
+# Infrastructure health — if using an external Elasticsearch, set EXTERNAL_ELASTICSEARCH_URL
+ES_URL=${EXTERNAL_ELASTICSEARCH_URL:-http://localhost:9200}
+curl -f $ES_URL/_cluster/health || echo "Elasticsearch unhealthy"
 curl -f http://localhost:6333/collections || echo "Qdrant unhealthy"
 curl -f http://localhost:8080/health || echo "Keycloak unhealthy"
 ```

@@ -5,8 +5,8 @@ services:
   waf:
     build: ./waf
     ports:
-      - "80:80"
-      - "443:443"
+      - "3000:80"
+      - "8443:443"
     depends_on:
       - frontend
       - bff-service
@@ -57,7 +57,7 @@ services:
       - AZURE_DEPLOYMENT_NAME=${AZURE_DEPLOYMENT_NAME:-gpt-4}
       - AZURE_DEPLOYMENT_NAME_35=${AZURE_DEPLOYMENT_NAME_35:-gpt-35-turbo}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_URL=${EXTERNAL_ELASTICSEARCH_URL:-http://elasticsearch:9200}
       - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
       - ELASTICSEARCH_VERIFY_CERTS=false
       - VECTOR_SERVICE_URL=http://vector-service:8004
@@ -71,7 +71,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_URL=${EXTERNAL_ELASTICSEARCH_URL:-http://elasticsearch:9200}
       - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
       - ELASTICSEARCH_VERIFY_CERTS=false
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
@@ -177,8 +177,8 @@ services:
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
     command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
-    depends_on:
-      - elasticsearch
+    # depends_on:
+    #   - elasticsearch
 
 volumes:
   es_data:

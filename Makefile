@@ -42,22 +42,26 @@ push:
 	@docker-compose -f docker-compose.buildx.yml push
 
 
+
 up:
 	@bash -c '\
 if [ -n "${EXTERNAL_ELASTICSEARCH_URL-}" ]; then \
-		echo "Using external Elasticsearch at ${EXTERNAL_ELASTICSEARCH_URL}. Starting services without local elasticsearch..."; \
-		$(COMPOSE_BUILDX) up -d --remove-orphans \ \
-			waf frontend bff-service auth-service ai-service document-service vector-service cache-service security-service keycloak keycloak-db qdrant redis otel-collector; \
+		echo "Using external Elasticsearch at ${EXTERNAL_ELASTICSEARCH_URL}. Starting infra (qdrant, redis, keycloak, otel-collector) first..."; \
+		$(COMPOSE_BUILDX) up -d --remove-orphans qdrant redis keycloak keycloak-db otel-collector; \
+		echo "Now starting application services without local elasticsearch..."; \
+		$(COMPOSE_BUILDX) up -d --remove-orphans waf frontend bff-service auth-service ai-service document-service vector-service cache-service security-service; \
 	else \
 		$(COMPOSE_BUILDX) up -d; \
 	fi'
 
+
 dev-up:
 	@bash -c '\
 if [ -n "${EXTERNAL_ELASTICSEARCH_URL-}" ]; then \
-		echo "Using external Elasticsearch at ${EXTERNAL_ELASTICSEARCH_URL}. Starting dev services without local elasticsearch..."; \
-		$(COMPOSE_DEV) up -d --remove-orphans \ \
-			waf frontend bff-service auth-service ai-service document-service vector-service cache-service security-service keycloak keycloak-db qdrant redis otel-collector; \
+		echo "Using external Elasticsearch at ${EXTERNAL_ELASTICSEARCH_URL}. Starting infra (qdrant, redis, keycloak, otel-collector) first..."; \
+		$(COMPOSE_DEV) up -d --remove-orphans qdrant redis keycloak keycloak-db otel-collector; \
+		echo "Now starting dev application services without local elasticsearch..."; \
+		$(COMPOSE_DEV) up -d --remove-orphans waf frontend bff-service auth-service ai-service document-service vector-service cache-service security-service; \
 	else \
 		$(COMPOSE_DEV) up -d; \
 	fi'
