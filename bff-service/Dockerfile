@@ -2,9 +2,9 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# Copy package files first to leverage npm cache
-COPY bff-service/package.json bff-service/package-lock.json ./
-RUN npm ci --silent --no-audit --progress=false
+# Copy package.json and install dependencies (use npm install to avoid requiring package-lock.json)
+COPY bff-service/package.json ./
+RUN npm install --silent --no-audit --progress=false
 
 # Copy source after deps
 COPY bff-service/src/ src/
