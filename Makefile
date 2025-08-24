@@ -29,7 +29,12 @@ help:
 
 build:
 	@chmod +x build-scripts/build.sh
-	@bash build-scripts/build.sh
+	@chmod +x build-scripts/build.sh
+	@SERVICES="$${SERVICES:-frontend,bff-service,auth-service,security-service}" bash build-scripts/build.sh
+
+build-all:
+	@chmod +x build-scripts/build.sh
+	@bash build-scripts/build.sh --push
 
 buildx:
 	@$(COMPOSE_BUILDX) build --parallel

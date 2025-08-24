@@ -7,26 +7,25 @@ WORKDIR /app
 
 # Install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.npm \
-    --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=package-lock.json,target=package-lock.json \
-    npm ci --only=production && npm cache clean --force
+    --mount=type=bind,source=frontend/package.json,target=package.json \
+    npm install --production && npm cache clean --force
 
 FROM dependencies AS build
 WORKDIR /app
 
 # Copy source with optimal layering
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY tailwind.config.js ./
-COPY postcss.config.js ./
+COPY frontend/package*.json ./
+COPY frontend/tsconfig.json ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
 
 # Install all dependencies including dev
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm install
 
 # Copy source code
-COPY src/ src/
-COPY public/ public/
+COPY frontend/src/ src/
+COPY frontend/public/ public/
 
 # Build with cache mount for faster rebuilds
 RUN --mount=type=cache,target=/app/.next/cache \

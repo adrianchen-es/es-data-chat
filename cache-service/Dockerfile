@@ -1,34 +1,39 @@
 # cache-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.12-alpine AS base
+FROM python:3.11-slim AS base
 
 # System dependencies
-RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
-    apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 WORKDIR /app
 
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir sentence-transformers
+# Copy and install Python requirements with caching
+COPY cache-service/requirements.txt ./
 
-# Python dependencies with cache
+# Install python build tools (separate layer)
+RUN apt-get update && apt-get install -y --no-install-recommends python3-setuptools python3-wheel && rm -rf /var/lib/apt/lists/*
+
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
 WORKDIR /app
 
-# Copy source code
-COPY src/ src/
+# Copy source after dependencies
+COPY cache-service/src/ src/
 
-FROM python:3.12-alpine AS runtime
+FROM python:3.11-alpine AS runtime
 LABEL org.opencontainers.image.title="Cache Service"
 LABEL org.opencontainers.image.description="Multi-layer Redis cache with semantic similarity"
 

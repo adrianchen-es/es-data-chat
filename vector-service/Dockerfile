@@ -1,31 +1,36 @@
 # vector-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.12-alpine AS base
+FROM python:3.11-slim AS base
 
 # System dependencies
-RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
-    apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
+    build-essential \
     gcc \
     g++ \
+    python3-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 WORKDIR /app
 
-# Python dependencies with cache
+# Copy requirements first to leverage layer caching
+COPY vector-service/requirements.txt ./
+
+# Install python build tooling
+RUN apt-get update && apt-get install -y --no-install-recommends python3-setuptools python3-wheel && rm -rf /var/lib/apt/lists/*
+
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
 WORKDIR /app
 
-# Copy source code
-COPY src/ src/
+# Copy source after installing dependencies
+COPY vector-service/src/ src/
 
-FROM python:3.12-alpine AS runtime
+FROM python:3.11-alpine AS runtime
 LABEL org.opencontainers.image.title="Vector Database Service"
 LABEL org.opencontainers.image.description="Qdrant vector database service for semantic caching"
 

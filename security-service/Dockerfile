@@ -1,6 +1,6 @@
 # security-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.12-alpine AS base
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 FROM base AS dependencies
 
 # Copy requirements and install
-COPY requirements.txt .
+COPY security-service/requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.description="Data exfiltration prevention and thr
 RUN adduser --disabled-password --gecos '' securityuser
 
 # Copy source code
-COPY --chown=securityuser:securityuser src/ src/
+COPY --chown=securityuser:securityuser security-service/src/ src/
 
 USER securityuser
 

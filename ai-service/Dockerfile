@@ -1,32 +1,40 @@
 # ai-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.12-alpine AS base
+FROM python:3.11-slim AS base
 
-# System dependencies with cache
-RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
-    apt-get update && apt-get install -y \
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
     gcc \
     g++ \
+    python3-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 WORKDIR /app
 
-# Python dependencies with cache
+# Copy only requirements first to leverage docker layer caching
+COPY ai-service/requirements.txt ./
+
+# Ensure system-level build deps are installed (separate layer)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-setuptools python3-wheel && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python build tools and Python requirements (cache pip downloads)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
 WORKDIR /app
 
-# Copy source code
-COPY src/ src/
+# Copy source code after dependencies to avoid invalidating pip layer
+COPY ai-service/src/ src/
 COPY shared/ shared/
 
-FROM python:3.12-alpine AS runtime
+FROM python:3.11-alpine AS runtime
 LABEL org.opencontainers.image.title="AI Chat Service"
 LABEL org.opencontainers.image.description="Multi-model AI service with RAG"
 

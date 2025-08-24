@@ -30,6 +30,17 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       echo "Usage: $0 [--push]" >&2
       echo "  --push    Push built images to ${REGISTRY} (requires REGISTRY and VERSION)" >&2
+      echo "" >&2
+      echo "Environment variables:" >&2
+      echo "  SERVICES   Space-separated list of services to build (default: all services)" >&2
+      echo "  PLATFORMS  Comma-separated list of platforms (default: linux/amd64,linux/arm64)" >&2
+      echo "  REGISTRY   Docker registry prefix (default: localhost:5000)" >&2
+      echo "  VERSION    Image tag version (default: latest)" >&2
+      echo "" >&2
+      echo "Examples:" >&2
+      echo "  SERVICES=\"ai-service\" $0               # Build only ai-service" >&2
+      echo "  PLATFORMS=\"linux/amd64\" $0            # Build for amd64 only" >&2
+      echo "  SERVICES=\"ai-service bff-service\" PLATFORMS=\"linux/arm64\" $0 --push" >&2
       exit 0
       ;;
     *)
@@ -71,8 +82,39 @@ fi
 # Use existing builder
 docker buildx use ai-chat-builder
 
-# Services to build
-SERVICES=("frontend" "bff-service" "auth-service" "ai-service" "document-service" "cache-service" "vector-service" "security-service" "waf")
+# Services to build - can be overridden via SERVICES environment variable (space or comma separated)
+DEFAULT_SERVICES=("frontend" "bff-service" "auth-service" "ai-service" "document-service" "cache-service" "vector-service" "security-service" "waf")
+
+# Parse SERVICES environment variable if provided; accept comma or space separated lists
+if [ -n "${SERVICES:-}" ]; then
+  # normalize commas to spaces, trim, then read into array
+  SERVICES_NORMALIZED=$(echo "${SERVICES}" | tr ',' ' ')
+  read -ra SERVICES_ARRAY <<< "${SERVICES_NORMALIZED}"
+  echo -e "${YELLOW}Building specific services: ${SERVICES_NORMALIZED}${NC}"
+else
+  SERVICES_ARRAY=("${DEFAULT_SERVICES[@]}")
+  echo -e "${YELLOW}Building all services${NC}"
+fi
+
+# Validate that specified services exist
+ALL_SERVICES=("${DEFAULT_SERVICES[@]}")
+for service in "${SERVICES_ARRAY[@]}"; do
+  if [[ ! " ${ALL_SERVICES[@]} " =~ " ${service} " ]]; then
+    echo -e "${RED}Error: Unknown service '${service}'. Available services: ${ALL_SERVICES[*]}${NC}" >&2
+    exit 1
+  fi
+  if [ ! -f "${service}/Dockerfile" ]; then
+    echo -e "${RED}Error: Dockerfile not found for service '${service}' at ${service}/Dockerfile${NC}" >&2
+    exit 1
+  fi
+done
+
+# Normalize PLATFORMS: accept comma or space-separated lists but store comma-separated for buildx
+PLATFORMS_NORMALIZED=$(echo "${PLATFORMS}" | tr ' ' ',')
+PLATFORMS=${PLATFORMS_NORMALIZED}
+echo -e "${YELLOW}Platforms: ${PLATFORMS}${NC}"
+echo -e "${YELLOW}Registry: ${REGISTRY}${NC}"
+echo -e "${YELLOW}Version: ${VERSION}${NC}"
 
 build_service() {
   local service=$1
@@ -82,6 +124,7 @@ build_service() {
   local build_platforms="${PLATFORMS}"
   local extra_flags=()
   local cache_flags=()
+  local build_args=()
 
   if [ "${PUSH}" = true ]; then
     extra_flags+=("--push")
@@ -104,23 +147,28 @@ build_service() {
     cache_flags+=("--cache-to" "${CACHE_TO}-${service}")
   fi
 
+  # pass service name into Dockerfile as build-arg to let Dockerfiles optimize per-service steps
+  build_args+=("--build-arg" "SERVICE=${service}")
+
+  # Run buildx build with cache flags and build-arg for better layer re-use
   docker buildx build \
     --platform "${build_platforms}" \
-    ${cache_flags[@]:+${cache_flags[@]}} \
+    "${cache_flags[@]}" \
     --tag "${REGISTRY}/ai-chat-${service}:${VERSION}" \
     --tag "${REGISTRY}/ai-chat-${service}:latest" \
     --file "${service}/Dockerfile" \
     --progress plain \
+    "${build_args[@]}" \
     "${extra_flags[@]}" \
-    "${service}/"
+    .
 }
 
 # Build all services in parallel
 export -f build_service
 export PLATFORMS REGISTRY VERSION CACHE_FROM CACHE_TO GREEN NC RED YELLOW PUSH
 
-echo -e "${YELLOW}🏗️  Building ${#SERVICES[@]} services in parallel${NC}"
-printf '%s\n' "${SERVICES[@]}" | xargs -P4 -I{} bash -c 'build_service "{}"'
+echo -e "${YELLOW}🏗️  Building ${#SERVICES_ARRAY[@]} services in parallel${NC}"
+printf '%s\n' "${SERVICES_ARRAY[@]}" | xargs -P4 -I{} bash -c 'build_service "{}"'
 
 echo -e "${GREEN}✅ All services built successfully${NC}"
 
@@ -132,7 +180,7 @@ cat > build-manifest.json << EOF
   "platforms": "${PLATFORMS}",
   "registry": "${REGISTRY}",
   "services": {
-$(for service in "${SERVICES[@]}"; do
+$(for service in "${SERVICES_ARRAY[@]}"; do
     echo "    \"${service}\": {\"image\": \"${REGISTRY}/ai-chat-${service}:${VERSION}\", \"platforms\": \"${PLATFORMS}\"},"
 done | sed '$ s/,$//')
   },
