@@ -1,10 +1,13 @@
 {
   "version": "latest",
-  "platforms": "linux/amd64",
+  "platforms": "linux/amd64,linux/arm64",
   "registry": "localhost:5000",
   "services": {
-    "frontend": {"image": "localhost:5000/ai-chat-frontend:latest", "platforms": "linux/amd64"}
+    "frontend": {"image": "localhost:5000/ai-chat-frontend:latest", "platforms": "linux/amd64,linux/arm64"},
+    "bff-service": {"image": "localhost:5000/ai-chat-bff-service:latest", "platforms": "linux/amd64,linux/arm64"},
+    "auth-service": {"image": "localhost:5000/ai-chat-auth-service:latest", "platforms": "linux/amd64,linux/arm64"},
+    "security-service": {"image": "localhost:5000/ai-chat-security-service:latest", "platforms": "linux/amd64,linux/arm64"}
   },
-  "built_at": "2025-08-24T10:51:53+00:00",
+  "built_at": "2025-08-24T11:21:57+00:00",
   "cache_enabled": true
 }

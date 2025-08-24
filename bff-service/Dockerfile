@@ -2,11 +2,15 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# Copy package.json and install dependencies (use npm install to avoid requiring package-lock.json)
+# Copy package files and use npm ci for deterministic installs
 COPY bff-service/package.json ./
-RUN npm install --silent --no-audit --progress=false
+COPY bff-service/package-lock.json ./
 
-# Copy source after deps
+# Install dependencies with cache mount; use npm ci which respects package-lock.json
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --production --silent --no-audit --progress=false && npm cache clean --force
+
+# Copy source after deps to maximize layer caching
 COPY bff-service/src/ src/
 RUN npm run build
 EXPOSE 3001
