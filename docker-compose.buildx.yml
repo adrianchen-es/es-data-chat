@@ -70,6 +70,8 @@ services:
         BUILDKIT_INLINE_CACHE: 1
     depends_on:
       - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
 
   redis:
     image: redis:7-alpine
@@ -94,7 +96,7 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - frontend
       - bff-service

@@ -233,5 +233,11 @@ async def health_check():
         return {"status": "unhealthy", "service": "cache"}
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    # Check if running under gunicorn
+    if "gunicorn" in os.environ.get("SERVER_SOFTWARE", ""):
+        # Running under gunicorn, don't start uvicorn
+        pass
+    else:
+        import uvicorn
+        # Fallback to uvicorn for development
+        uvicorn.run(app, host="0.0.0.0", port=8002)
