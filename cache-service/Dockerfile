@@ -36,7 +36,8 @@ WORKDIR /app
 COPY src/ src/
 
 # Use a lightweight runtime where possible
-FROM python:3.11-slim AS runtime
+FROM python:3.11-alpine AS runtime
+COPY --from=dependencies /usr/local/bin /usr/local/bin
 LABEL org.opencontainers.image.title="Cache Service"
 LABEL org.opencontainers.image.description="Multi-layer Redis cache with semantic similarity"
 
@@ -47,14 +48,15 @@ RUN adduser --disabled-password --gecos '' cacheuser
 
 # Copy dependencies and source
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-# Copy console entrypoints/scripts (gunicorn/uvicorn console scripts) so they're on PATH in the runtime
-COPY --from=dependencies /usr/local/bin /usr/local/bin
 COPY --from=build --chown=cacheuser:cacheuser /app .
 
-# ...existing code...
 USER cacheuser
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+        CMD python -c "import httpx; httpx.get('http://localhost:8002/health', timeout=3)"
+
 EXPOSE 8002
+
 # Entrypoint: prefer gunicorn with uvicorn workers if available, otherwise use uvicorn module
 COPY --chown=cacheuser:cacheuser --chmod=755 <<'EOF' /usr/local/bin/entrypoint.sh
 #!/bin/sh
@@ -71,12 +73,5 @@ else
     exec python -m uvicorn "$APP_MODULE" --host 0.0.0.0 --port 8002
 fi
 EOF
-
-USER cacheuser
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-        CMD python -c "import httpx; httpx.get('http://localhost:8002/health', timeout=3)"
-
-EXPOSE 8002
 
 CMD ["/usr/local/bin/entrypoint.sh"]

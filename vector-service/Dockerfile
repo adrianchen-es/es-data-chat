@@ -32,6 +32,7 @@ WORKDIR /app
 COPY src/ src/
 
 FROM python:3.11-alpine AS runtime
+COPY --from=dependencies /usr/local/bin /usr/local/bin
 LABEL org.opencontainers.image.title="Vector Database Service"
 LABEL org.opencontainers.image.description="Qdrant vector database service for semantic caching"
 
@@ -51,4 +52,21 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 EXPOSE 8004
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8004"]
+# Entrypoint: prefer gunicorn with uvicorn workers if available, otherwise use uvicorn module
+COPY --chown=docuser:docuser --chmod=755 <<'EOF' /usr/local/bin/entrypoint.sh
+#!/bin/sh
+set -e
+
+# Allow overriding the ASGI app module via APP_MODULE env var
+APP_MODULE=${APP_MODULE:-src.main:app}
+
+# If gunicorn is installed, use it with uvicorn workers for process management
+if command -v gunicorn >/dev/null 2>&1; then
+    exec gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8004 --workers ${WORKERS:-2}
+else
+    # Fallback to running uvicorn directly via python -m to ensure the module path works
+    exec python -m uvicorn "$APP_MODULE" --host 0.0.0.0 --port 8004
+fi
+EOF
+
+CMD ["/usr/local/bin/entrypoint.sh"]
