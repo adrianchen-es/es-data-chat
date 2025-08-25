@@ -36,7 +36,7 @@ WORKDIR /app
 COPY src/ src/
 
 # Use a lightweight runtime where possible
-FROM python:3.11-alpine AS runtime
+FROM python:3.11-slim AS runtime
 LABEL org.opencontainers.image.title="Cache Service"
 LABEL org.opencontainers.image.description="Multi-layer Redis cache with semantic similarity"
 
@@ -47,13 +47,36 @@ RUN adduser --disabled-password --gecos '' cacheuser
 
 # Copy dependencies and source
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# Copy console entrypoints/scripts (gunicorn/uvicorn console scripts) so they're on PATH in the runtime
+COPY --from=dependencies /usr/local/bin /usr/local/bin
 COPY --from=build --chown=cacheuser:cacheuser /app .
+
+# ...existing code...
+USER cacheuser
+
+EXPOSE 8002
+# Entrypoint: prefer gunicorn with uvicorn workers if available, otherwise use uvicorn module
+COPY --chown=cacheuser:cacheuser --chmod=755 <<'EOF' /usr/local/bin/entrypoint.sh
+#!/bin/sh
+set -e
+
+# Allow overriding the ASGI app module via APP_MODULE env var
+APP_MODULE=${APP_MODULE:-src.cache:app}
+
+# If gunicorn is installed, use it with uvicorn workers for process management
+if command -v gunicorn >/dev/null 2>&1; then
+    exec gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8002 --workers ${WORKERS:-2}
+else
+    # Fallback to running uvicorn directly via python -m to ensure the module path works
+    exec python -m uvicorn "$APP_MODULE" --host 0.0.0.0 --port 8002
+fi
+EOF
 
 USER cacheuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8002/health', timeout=3)"
+        CMD python -c "import httpx; httpx.get('http://localhost:8002/health', timeout=3)"
 
 EXPOSE 8002
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["/usr/local/bin/entrypoint.sh"]
