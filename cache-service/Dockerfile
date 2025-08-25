@@ -1,18 +1,18 @@
 # cache-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-alpine AS base
 
 # System dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk update && apk upgrade
+RUN apk add --no-cache \
+    build-base \
+    python3-dev \
+    libffi-dev
+
+# System dependencies for cryptography
+RUN apk add --no-cache \
     gcc \
     g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 WORKDIR /app
@@ -21,11 +21,9 @@ WORKDIR /app
 # Copy and install Python requirements with caching
 COPY requirements.txt ./
 
-# Install python build tools (separate layer)
-RUN apt-get update && apt-get install -y --no-install-recommends python3-setuptools python3-wheel && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache py3-pip py3-setuptools py3-wheel
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
@@ -36,7 +34,7 @@ WORKDIR /app
 COPY src/ src/
 
 # Use a lightweight runtime where possible
-FROM python:3.11-alpine AS runtime
+FROM python:3.12-alpine AS runtime
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 LABEL org.opencontainers.image.title="Cache Service"
 LABEL org.opencontainers.image.description="Multi-layer Redis cache with semantic similarity"
@@ -47,7 +45,7 @@ WORKDIR /app
 RUN adduser --disabled-password --gecos '' cacheuser
 
 # Copy dependencies and source
-COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=build --chown=cacheuser:cacheuser /app .
 
 USER cacheuser
@@ -65,9 +63,16 @@ set -e
 # Allow overriding the ASGI app module via APP_MODULE env var
 APP_MODULE=${APP_MODULE:-src.cache:app}
 
-# If gunicorn is installed, use it with uvicorn workers for process management
-if command -v gunicorn >/dev/null 2>&1; then
-    exec gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8002 --workers ${WORKERS:-2}
+if python - <<'PY' 2>/dev/null
+import importlib,sys
+try:
+    importlib.util.find_spec('gunicorn')
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+PY
+then
+    exec python -m gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8002 --workers ${WORKERS:-2}
 else
     # Fallback to running uvicorn directly via python -m to ensure the module path works
     exec python -m uvicorn "$APP_MODULE" --host 0.0.0.0 --port 8002

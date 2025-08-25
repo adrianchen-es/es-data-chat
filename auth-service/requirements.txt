@@ -1,7 +1,7 @@
 # auth-service/requirements.txt
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-gunicorn==21.2.0
+gunicorn==23.0.0
 python-keycloak==3.7.0
 python-jose[cryptography]==3.3.0
 httpx==0.25.0

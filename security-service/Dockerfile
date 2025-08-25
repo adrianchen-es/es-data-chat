@@ -1,6 +1,6 @@
 # security-service/Dockerfile
 # syntax=docker/dockerfile:1.6
-FROM python:3.11-slim AS base
+FROM python:3.12-alpine AS base
 
 WORKDIR /app
 
@@ -10,13 +10,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 FROM base AS dependencies
 
+RUN apk add --no-cache py3-pip py3-setuptools py3-wheel
+
 # Copy requirements and install (cache pip downloads and ensure build tools present)
 COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
-FROM python:3.11-alpine AS runtime
+FROM python:3.12-alpine AS runtime
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 LABEL org.opencontainers.image.title="Security Service"
 LABEL org.opencontainers.image.description="Data exfiltration prevention and threat detection"
@@ -42,9 +43,16 @@ set -e
 # Allow overriding the ASGI app module via APP_MODULE env var
 APP_MODULE=${APP_MODULE:-src.main:app}
 
-# If gunicorn is installed, use it with uvicorn workers for process management
-if command -v gunicorn >/dev/null 2>&1; then
-    exec gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8005 --workers ${WORKERS:-2}
+if python - <<'PY' 2>/dev/null
+import importlib,sys
+try:
+    importlib.util.find_spec('gunicorn')
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+PY
+then
+    exec python -m gunicorn -k uvicorn.workers.UvicornWorker "$APP_MODULE" -b 0.0.0.0:8005 --workers ${WORKERS:-2}
 else
     # Fallback to running uvicorn directly via python -m to ensure the module path works
     exec python -m uvicorn "$APP_MODULE" --host 0.0.0.0 --port 8005

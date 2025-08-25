@@ -210,13 +210,19 @@ model_router = ModelRouter()
 # Create agents for different models
 agents = {}
 for model_name, model in MODELS.items():
+    # Avoid very long inline f-strings which can be sensitive to accidental
+    # line breaks when files are edited or copied. Build the prompt safely.
+    system_prompt = (
+        "You are an intelligent AI assistant ({model_name}) with access to a knowledge base and conversation history. "
+        "Provide accurate, helpful responses using available context. Cite sources when using retrieved information. "
+        "Be concise but comprehensive in your responses."
+    ).format(model_name=model_name)
+
     agent = Agent(
         model,
         deps_type=Dependencies,
         result_type=str,
-        system_prompt=f"""You are an intelligent AI assistant ({model_name}) with access to a knowledge base and conversation history. 
-        Provide accurate, helpful responses using available context. Cite sources when using retrieved information.
-        Be concise but comprehensive in your responses."""
+        system_prompt=system_prompt
     )
     
     @agent.tool
@@ -341,27 +347,31 @@ async def stream_chat(
                     )
                     
                     if should_stream:
-                        yield f"data: {json.dumps({
-                            'content': buffer, 
+                        payload = {
+                            'content': buffer,
                             'finished': False,
                             'model_used': actual_model_name,
                             'token_count': token_count
-                        })}\n\n"
+                        }
+                        yield "data: " + json.dumps(payload) + "\n\n"
                         buffer = ""
                         await asyncio.sleep(0.01)  # Smooth streaming
             
             if buffer:
-                yield f"data: {json.dumps({'content': buffer, 'finished': False})}\n\n"
+                payload = {'content': buffer, 'finished': False}
+                yield "data: " + json.dumps(payload) + "\n\n"
             
-            yield f"data: {json.dumps({
+            payload = {
                 'finished': True, 
                 'conversation_id': conversation_id_final,
                 'model_used': actual_model_name,
                 'total_tokens': token_count
-            })}\n\n"
+            }
+            yield "data: " + json.dumps(payload) + "\n\n"
             
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e), 'finished': True})}\n\n"
+            payload = {'error': str(e), 'finished': True}
+            yield "data: " + json.dumps(payload) + "\n\n"
     
     return StreamingResponse(
         generate(),
