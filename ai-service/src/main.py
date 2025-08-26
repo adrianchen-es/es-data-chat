@@ -26,20 +26,16 @@ ES_SERVICE_URL = os.getenv("ELASTICSEARCH_SERVICE_URL", "http://document-service
 
 # Multi-model configuration with Azure OpenAI
 MODELS = {
-    "gpt-4o": OpenAIModel("gpt-4o", api_key=os.getenv("OPENAI_API_KEY")),
-    "gpt-3.5-turbo": OpenAIModel("gpt-3.5-turbo", api_key=os.getenv("OPENAI_API_KEY")),
-    "claude-3-sonnet": AnthropicModel("claude-3-5-sonnet-20241022", api_key=os.getenv("ANTHROPIC_API_KEY")),
+    "gpt-4o": OpenAIModel("gpt-4o"),
+    "gpt-3.5-turbo": OpenAIModel("gpt-3.5-turbo"),
+    "claude-3-sonnet": AnthropicModel("claude-3-5-sonnet-20241022"),
     "azure-gpt-4": OpenAIModel(
         "gpt-4",
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        base_url=f"{os.getenv('AZURE_OPENAI_ENDPOINT')}/openai/deployments/{os.getenv('AZURE_DEPLOYMENT_NAME', 'gpt-4')}/",
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        provider="azure"
     ) if os.getenv("AZURE_OPENAI_API_KEY") else None,
     "azure-gpt-35": OpenAIModel(
         "gpt-3.5-turbo", 
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        base_url=f"{os.getenv('AZURE_OPENAI_ENDPOINT')}/openai/deployments/{os.getenv('AZURE_DEPLOYMENT_NAME_35', 'gpt-35-turbo')}/",
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+        provider="azure"
     ) if os.getenv("AZURE_OPENAI_API_KEY") else None
 }
 
@@ -131,9 +127,11 @@ class ModelRouter:
         """Check model health periodically"""
         for name, model in MODELS.items():
             try:
-                # Test with minimal request
+                # Test with minimal Agent request using correct pydantic-ai API
+                from pydantic_ai import Agent
+                test_agent = Agent(model, output_type=str)
                 test_response = await asyncio.wait_for(
-                    model.generate("Hi", max_tokens=1),
+                    test_agent.run("Hi"),
                     timeout=10.0
                 )
                 self.model_health[name] = True
@@ -221,7 +219,7 @@ for model_name, model in MODELS.items():
     agent = Agent(
         model,
         deps_type=Dependencies,
-        result_type=str,
+        output_type=str,
         system_prompt=system_prompt
     )
     
