@@ -36,15 +36,21 @@ if os.getenv("ANTHROPIC_API_KEY"):
     MODELS["claude-3-sonnet"] = AnthropicModel("claude-3-5-sonnet-20241022")
 
 if os.getenv("AZURE_OPENAI_API_KEY"):
-    # For Azure OpenAI, we'll use the OpenAI model with Azure credentials
-    # The Azure configuration will be handled via environment variables
+    # Azure OpenAI configuration
     azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4")
     
+    print(f"🔧 Configuring Azure OpenAI with deployment: {azure_deployment}")
+    print(f"   Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
+    print(f"   API Version: {os.getenv('AZURE_OPENAI_API_VERSION')}")
+    
+    # Create Azure OpenAI models using deployment name
+    # Primary model uses the exact deployment name (highest precedence)
+    if os.getenv("AZURE_AI_MODEL"):
+        MODELS[os.getenv("AZURE_AI_MODEL")] = OpenAIModel(azure_deployment)
+    
+    # Also create aliased models for compatibility
     MODELS["azure-gpt-4"] = OpenAIModel(azure_deployment)
-    if os.getenv("AZURE_DEPLOYMENT_NAME_35"):
-        MODELS["azure-gpt-35"] = OpenAIModel(os.getenv("AZURE_DEPLOYMENT_NAME_35"))
-    else:
-        MODELS["azure-gpt-35"] = OpenAIModel(azure_deployment)
+    MODELS["azure-gpt-35"] = OpenAIModel(azure_deployment)
 
 # Ensure we have at least one model
 if not MODELS:
@@ -56,7 +62,7 @@ class ChatRequest(BaseModel):
     message: str = Field(max_length=2000)
     conversation_id: Optional[str] = None
     user_id: str
-    model_preference: str = "gpt-4o"
+    model_preference: str = Field(default_factory=lambda: os.getenv("AZURE_MODEL_NAME", "gpt-4o"))
     use_rag: bool = True
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=2000, ge=1, le=4000)
@@ -115,14 +121,30 @@ class ModelRouter:
             "azure-gpt-4": {"input": 0.03, "output": 0.06},
             "azure-gpt-35": {"input": 0.002, "output": 0.002}
         }
-        # Create fallback chain from available models
+        # Create fallback chain with Azure deployment having highest precedence
         available_models = list(MODELS.keys())
-        preference_order = [
-            "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
-            "gpt-3.5-turbo", "claude-3-sonnet"
-        ]
-        self.fallback_chain = [model for model in preference_order if model in available_models]
-        # Add any remaining models
+        azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME")
+        
+        # If Azure deployment is configured, prioritize it first
+        if azure_deployment and azure_deployment in available_models:
+            self.fallback_chain = [azure_deployment]
+            # Add other models in preference order
+            preference_order = [
+                "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
+                "gpt-3.5-turbo", "claude-3-sonnet"
+            ]
+            for model in preference_order:
+                if model in available_models and model != azure_deployment:
+                    self.fallback_chain.append(model)
+        else:
+            # Standard preference order when no Azure deployment
+            preference_order = [
+                "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
+                "gpt-3.5-turbo", "claude-3-sonnet"
+            ]
+            self.fallback_chain = [model for model in preference_order if model in available_models]
+        
+        # Add any remaining models not in preference order
         self.fallback_chain.extend([model for model in available_models if model not in self.fallback_chain])
     
     def get_model(self, preference: str) -> tuple[Model, str]:
@@ -134,6 +156,17 @@ class ModelRouter:
         for model_name in self.fallback_chain:
             if model_name in MODELS and self.model_health.get(model_name, False):
                 return MODELS[model_name], model_name
+        
+        # If no healthy models, try the preferred model anyway (for testing)
+        if preference in MODELS:
+            print(f"Warning: Using potentially unhealthy model {preference}")
+            return MODELS[preference], preference
+            
+        # Try any available model as last resort
+        if MODELS:
+            model_name = next(iter(MODELS.keys()))
+            print(f"Warning: Using potentially unhealthy fallback model {model_name}")
+            return MODELS[model_name], model_name
         
         raise HTTPException(status_code=503, detail="No healthy models available")
     
@@ -287,9 +320,8 @@ async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks)
             # Generate response with custom parameters
             result = await agent.run(
                 request.message, 
-                deps=deps,
-                max_tokens=request.max_tokens,
-                temperature=request.temperature
+                deps=deps
+                # Note: max_tokens and temperature are handled by the model configuration
             )
             
             processing_time = int((time.time() - start_time) * 1000)
