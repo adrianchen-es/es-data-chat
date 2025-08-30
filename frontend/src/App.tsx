@@ -6,6 +6,7 @@ import {
   Clock, Database, Shield, TrendingUp, Maximize2, Minimize2
 } from 'lucide-react';
 import clsx from 'clsx';
+import { telemetry } from './telemetry/otel';
 
 interface Message {
   id: string;
