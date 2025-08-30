@@ -3,7 +3,9 @@ from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.azure import AzureProvider
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, AsyncGenerator
@@ -29,28 +31,55 @@ MODELS = {}
 
 # Only add models if we have the required API keys
 if os.getenv("OPENAI_API_KEY"):
-    MODELS["gpt-4o"] = OpenAIModel("gpt-4o")
-    MODELS["gpt-3.5-turbo"] = OpenAIModel("gpt-3.5-turbo")
+    MODELS["gpt-4o"] = OpenAIChatModel("gpt-4o")
+    MODELS["gpt-3.5-turbo"] = OpenAIChatModel("gpt-3.5-turbo")
 
 if os.getenv("ANTHROPIC_API_KEY"):
     MODELS["claude-3-sonnet"] = AnthropicModel("claude-3-5-sonnet-20241022")
 
 if os.getenv("AZURE_OPENAI_API_KEY"):
-    # Azure OpenAI configuration
-    azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4")
+    # Azure OpenAI configuration - simple approach
+    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "azure-gpt-4o-deployment")
+    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
     
-    print(f"🔧 Configuring Azure OpenAI with deployment: {azure_deployment}")
-    print(f"   Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
-    print(f"   API Version: {os.getenv('AZURE_OPENAI_API_VERSION')}")
+    print(f"🔧 Configuring Azure OpenAI models")
+    print(f"   Endpoint: {azure_endpoint}")
+    print(f"   API Version: {azure_api_version}")
+    print(f"   API Key: {azure_api_key[:8]}...{azure_api_key[-4:]}")
+
+    azure_provider=AzureProvider(
+        azure_endpoint=azure_endpoint,
+        api_version=azure_api_version,
+        api_key=azure_api_key,
+    )
     
-    # Create Azure OpenAI models using deployment name
-    # Primary model uses the exact deployment name (highest precedence)
-    if os.getenv("AZURE_AI_MODEL"):
-        MODELS[os.getenv("AZURE_AI_MODEL")] = OpenAIModel(azure_deployment)
-    
-    # Also create aliased models for compatibility
-    MODELS["azure-gpt-4"] = OpenAIModel(azure_deployment)
-    MODELS["azure-gpt-35"] = OpenAIModel(azure_deployment)
+    try:
+        # Use simple model string - pydantic-ai should pick up Azure from env vars
+        if azure_deployment:
+            MODELS[azure_deployment] = OpenAIChatModel(azure_deployment, provider=azure_provider)
+        MODELS["azure-gpt-4o"] = OpenAIChatModel("gpt-4o", provider=azure_provider)
+        MODELS["azure-gpt-4o-mini"] = OpenAIChatModel("gpt-4o-mini", provider=azure_provider)
+        MODELS["azure-gpt-35-turbo"] = OpenAIChatModel("gpt-35-turbo", provider=azure_provider)
+        MODELS["azure-gpt-4"] = OpenAIChatModel("gpt-4", provider=azure_provider)
+
+        print(f"✅ Successfully configured {len(MODELS)} Azure OpenAI models")
+        
+    except Exception as e:
+        try:
+            if azure_deployment:
+                MODELS[azure_deployment] = OpenAIChatModel(azure_deployment)
+            # Use simple model string - pydantic-ai should pick up Azure from env vars
+            MODELS["azure-gpt-4o"] = OpenAIChatModel("gpt-4o")
+            MODELS["azure-gpt-4o-mini"] = OpenAIChatModel("gpt-4o-mini")
+            MODELS["azure-gpt-35-turbo"] = OpenAIChatModel("gpt-35-turbo")
+            MODELS["azure-gpt-4"] = OpenAIChatModel("gpt-4")
+
+            print(f"✅ Successfully configured {len(MODELS)} Azure OpenAI models with default config.")
+            
+        except Exception as e:
+            print(f"❌ Failed to configure Azure OpenAI: {e}")
 
 # Ensure we have at least one model
 if not MODELS:
@@ -62,7 +91,7 @@ class ChatRequest(BaseModel):
     message: str = Field(max_length=2000)
     conversation_id: Optional[str] = None
     user_id: str
-    model_preference: str = Field(default_factory=lambda: os.getenv("AZURE_MODEL_NAME", "gpt-4o"))
+    model_preference: str = Field(default="azure-gpt-4o")
     use_rag: bool = True
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=2000, ge=1, le=4000)
@@ -118,8 +147,10 @@ class ModelRouter:
             "gpt-4o": {"input": 0.005, "output": 0.015},
             "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
             "claude-3-sonnet": {"input": 0.003, "output": 0.015},
-            "azure-gpt-4": {"input": 0.03, "output": 0.06},
-            "azure-gpt-35": {"input": 0.002, "output": 0.002}
+            "azure-gpt-4o": {"input": 0.03, "output": 0.06},
+            "azure-gpt-4o-mini": {"input": 0.002, "output": 0.002},
+            "azure-gpt-35-turbo": {"input": 0.002, "output": 0.002},
+            "azure-gpt-4": {"input": 0.03, "output": 0.06}
         }
         # Create fallback chain with Azure deployment having highest precedence
         available_models = list(MODELS.keys())

@@ -28,8 +28,30 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 UPLOAD_DIR = Path("/tmp/uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Elasticsearch client
-es_client = AsyncElasticsearch([os.getenv('ELASTICSEARCH_URL', 'http://localhost:9200')])
+# Elasticsearch client with authentication
+def create_es_client():
+    """Create Elasticsearch client with proper authentication"""
+    config = {
+        'hosts': [os.getenv('ELASTICSEARCH_URL', 'http://localhost:9200')],
+        'timeout': 30,
+        'max_retries': 3,
+        'retry_on_timeout': True
+    }
+    
+    # API Key authentication
+    api_key = os.getenv('ELASTICSEARCH_API_KEY')
+    if api_key:
+        config['api_key'] = api_key
+        
+    # SSL verification
+    verify_certs = os.getenv('ELASTICSEARCH_VERIFY_CERTS', 'true').lower() == 'true'
+    if not verify_certs:
+        config['verify_certs'] = False
+        config['ssl_show_warn'] = False
+    
+    return AsyncElasticsearch(**config)
+
+es_client = create_es_client()
 
 class DocumentProcessor:
     @staticmethod
