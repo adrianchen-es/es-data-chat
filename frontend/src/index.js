@@ -2,7 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 
 function App() {
-  return React.createElement('div', null, 'AI Chat Frontend Placeholder')
+  return React.createElement('div', null, 'ES Data Assistant')
 }
 
 const container = document.getElementById('root') || document.createElement('div')

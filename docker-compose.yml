@@ -13,8 +13,6 @@ services:
     depends_on:
       - frontend
       - bff-service
-    volumes:
-      - ./waf/logs:/var/log
 
   frontend:
     build:

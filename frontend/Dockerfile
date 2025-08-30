@@ -33,6 +33,7 @@ RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
 FROM nginx:alpine AS runtime
+##FROM cgr.dev/chainguard/nginx:latest AS runtime
 LABEL org.opencontainers.image.title="AI Chat Frontend"
 LABEL org.opencontainers.image.description="React TypeScript frontend with optimized build"
 
@@ -45,7 +46,10 @@ COPY --from=build --chown=nodejs:nodejs /app/build /usr/share/nginx/html
 
 # Custom nginx configuration for SPA
 RUN echo 'server { \
-    listen 8080 http2; \
+    listen 8080; \
+    http2 on; \
+    server_name _; \
+    server_tokens off; \
     location / { \
         root /usr/share/nginx/html; \
         try_files $uri $uri/ /index.html; \
