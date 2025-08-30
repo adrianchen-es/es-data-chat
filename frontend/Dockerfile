@@ -45,7 +45,7 @@ COPY --from=build --chown=nodejs:nodejs /app/build /usr/share/nginx/html
 
 # Custom nginx configuration for SPA
 RUN echo 'server { \
-    listen 3000; \
+    listen 8080; \
     location / { \
         root /usr/share/nginx/html; \
         try_files $uri $uri/ /index.html; \
@@ -58,10 +58,18 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
+# Fix permissions for nginx cache directories
+RUN mkdir -p /var/cache/nginx/client_temp \
+             /var/cache/nginx/proxy_temp \
+             /var/cache/nginx/fastcgi_temp \
+             /var/cache/nginx/uwsgi_temp \
+             /var/cache/nginx/scgi_temp && \
+    chown -R nodejs:nodejs /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
+
 USER nodejs
-EXPOSE 3000
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/ || exit 1
+    CMD curl -f http://localhost:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

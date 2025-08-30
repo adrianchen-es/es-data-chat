@@ -2,13 +2,39 @@
 from fastapi import FastAPI, HTTPException
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from sentence_transformers import SentenceTransformer
 import numpy as np
 import uuid
 from typing import List, Dict, Optional
 import os
+import hashlib
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+# Try to import sentence_transformers, use fallback if not available
+try:
+    from sentence_transformers import SentenceTransformer
+    HAS_SENTENCE_TRANSFORMERS = True
+except ImportError:
+    HAS_SENTENCE_TRANSFORMERS = False
+
+# Configure based on availability
+if HAS_SENTENCE_TRANSFORMERS:
+    encoder = SentenceTransformer("all-MiniLM-L6-v2")
+    VECTOR_SIZE = 384
+else:
+    encoder = None
+    VECTOR_SIZE = 64  # Smaller size for hash-based vectors
+
+def create_embedding(text: str) -> List[float]:
+    """Create embedding vector with fallback"""
+    if encoder is not None:
+        return encoder.encode(text).tolist()
+    else:
+        # Simple hash-based embedding fallback
+        h = hashlib.sha256(text.encode()).digest()
+        # Create fixed-size vector from hash
+        b = (h * (VECTOR_SIZE // len(h) + 1))[:VECTOR_SIZE * 4]  # 4 bytes per float32
+        return np.frombuffer(b, dtype=np.uint8).astype(np.float32).tolist()
 
 app = FastAPI(title="Vector Database Service", version="1.0.0")
 FastAPIInstrumentor.instrument_app(app)
@@ -19,9 +45,6 @@ qdrant_client = AsyncQdrantClient(
     host=os.getenv("QDRANT_HOST", "qdrant"),
     port=int(os.getenv("QDRANT_PORT", "6333"))
 )
-
-encoder = SentenceTransformer("all-MiniLM-L6-v2")
-VECTOR_SIZE = 384
 
 class VectorService:
     def __init__(self):
@@ -44,7 +67,7 @@ class VectorService:
     async def store_chat_response(self, query: str, response: Dict, user_id: str):
         """Store chat response for semantic caching"""
         with tracer.start_as_current_span("store_chat_vector"):
-            embedding = encoder.encode(query).tolist()
+            embedding = create_embedding(query)
             
             await qdrant_client.upsert(
                 collection_name=self.collections["chat_cache"],
@@ -63,7 +86,7 @@ class VectorService:
     async def search_similar_chats(self, query: str, user_id: str, threshold: float = 0.85):
         """Find semantically similar cached responses"""
         with tracer.start_as_current_span("search_chat_vectors") as span:
-            embedding = encoder.encode(query).tolist()
+            embedding = create_embedding(query)
             
             results = await qdrant_client.search(
                 collection_name=self.collections["chat_cache"],
@@ -87,7 +110,7 @@ class VectorService:
         with tracer.start_as_current_span("store_conversation_vector"):
             # Create embedding from conversation context
             context = " ".join([msg["content"] for msg in messages[-5:]])  # Last 5 messages
-            embedding = encoder.encode(context).tolist()
+            embedding = create_embedding(context)
             
             await qdrant_client.upsert(
                 collection_name=self.collections["conversations"],
@@ -130,7 +153,7 @@ async def store_conversation(conversation_id: str, messages: List[Dict], user_id
 @app.get("/conversations/similar")
 async def find_similar_conversations(query: str, user_id: str, limit: int = 3):
     """Find similar conversations for context"""
-    embedding = encoder.encode(query).tolist()
+    embedding = create_embedding(query)
     
     results = await qdrant_client.search(
         collection_name=vector_service.collections["conversations"],

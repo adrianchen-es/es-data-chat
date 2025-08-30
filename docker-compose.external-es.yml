@@ -1,0 +1,43 @@
+# docker-compose.external-es.yml
+# Override file for using external Elasticsearch
+# Use with: docker compose -f docker-compose.buildx.yml -f docker-compose.external-es.yml up -d
+
+services:
+  # Override AI service to use external Elasticsearch and Azure OpenAI
+  ai-service:
+    environment:
+      - ELASTICSEARCH_URL=${EXTERNAL_ELASTICSEARCH_URL}
+      - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
+      - ELASTICSEARCH_VERIFY_CERTS=${ELASTICSEARCH_VERIFY_CERTS:-true}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_DEPLOYMENT_NAME=${AZURE_DEPLOYMENT_NAME:-${AZURE_DEPLOYMENT_NAME}}
+      - AZURE_AI_MODEL=${AZURE_AI_MODEL:-gpt-4o}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - VECTOR_SERVICE_URL=http://vector-service:8004
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    # Remove dependency on local elasticsearch
+    depends_on:
+      - vector-service
+      # elasticsearch dependency removed
+
+  # Override Document service to use external Elasticsearch  
+  document-service:
+    environment:
+      - ELASTICSEARCH_URL=${EXTERNAL_ELASTICSEARCH_URL}
+      - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
+      - ELASTICSEARCH_VERIFY_CERTS=${ELASTICSEARCH_VERIFY_CERTS:-true}
+    # Remove dependency on local elasticsearch
+    depends_on: []
+    # elasticsearch dependency removed
+
+  # Remove the local elasticsearch service entirely
+  elasticsearch:
+    deploy:
+      replicas: 0
+    profiles: ["disabled"]
+
+# Note: When using this override file, the local elasticsearch container 
+# will not be started, and services will connect to EXTERNAL_ELASTICSEARCH_URL

@@ -3,7 +3,7 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 gunicorn==23.0.0
 redis==5.0.1
-numpy==1.25.2
+numpy>=1.26.0
 # Use local lightweight embedding fallback in docker builds; avoid heavy sentence-transformers
 # sentence-transformers==2.2.2
 pydantic==2.4.2

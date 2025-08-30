@@ -9,7 +9,7 @@ RUN apk add --no-cache \
     gcc \
     g++ \
     python3-dev \
-    libssl-dev
+    openssl-dev
 
 FROM base AS dependencies
 WORKDIR /app
@@ -22,6 +22,7 @@ COPY requirements.txt ./
 RUN apk add --no-cache py3-pip py3-setuptools py3-wheel
 
 RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
@@ -52,7 +53,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 EXPOSE 8004
 
 # Entrypoint: prefer gunicorn with uvicorn workers if available, otherwise use uvicorn module
-COPY --chown=docuser:docuser --chmod=755 <<'EOF' /usr/local/bin/entrypoint.sh
+COPY --chown=vectoruser:vectoruser --chmod=755 <<'EOF' /usr/local/bin/entrypoint.sh
 #!/bin/sh
 set -e
 

@@ -7,9 +7,11 @@ RUN apk update && apk upgrade
 RUN apk add --no-cache \
     gcc \
     g++ \
-    libmagic1 \
-    libmagic-dev \
-    file
+    libmagic \
+    file \
+    libstdc++ \
+    postgresql-dev \
+    mariadb-connector-c-dev
 
 FROM base AS dependencies
 WORKDIR /app
@@ -38,8 +40,9 @@ WORKDIR /app
 # Runtime dependencies
 RUN apk update && apk upgrade && \
     apk add --no-cache \
-    libmagic1 \
-    file
+    libmagic \
+    file \
+    libstdc++
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' docuser

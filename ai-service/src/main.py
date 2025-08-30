@@ -24,23 +24,32 @@ tracer = trace.get_tracer(__name__)
 VECTOR_SERVICE_URL = os.getenv("VECTOR_SERVICE_URL", "http://vector-service:8004")
 ES_SERVICE_URL = os.getenv("ELASTICSEARCH_SERVICE_URL", "http://document-service:8001")
 
-# Multi-model configuration with Azure OpenAI
-MODELS = {
-    "gpt-4o": OpenAIModel("gpt-4o"),
-    "gpt-3.5-turbo": OpenAIModel("gpt-3.5-turbo"),
-    "claude-3-sonnet": AnthropicModel("claude-3-5-sonnet-20241022"),
-    "azure-gpt-4": OpenAIModel(
-        "gpt-4",
-        provider="azure"
-    ) if os.getenv("AZURE_OPENAI_API_KEY") else None,
-    "azure-gpt-35": OpenAIModel(
-        "gpt-3.5-turbo", 
-        provider="azure"
-    ) if os.getenv("AZURE_OPENAI_API_KEY") else None
-}
+# Multi-model configuration with conditional initialization
+MODELS = {}
 
-# Filter out None models
-MODELS = {k: v for k, v in MODELS.items() if v is not None}
+# Only add models if we have the required API keys
+if os.getenv("OPENAI_API_KEY"):
+    MODELS["gpt-4o"] = OpenAIModel("gpt-4o")
+    MODELS["gpt-3.5-turbo"] = OpenAIModel("gpt-3.5-turbo")
+
+if os.getenv("ANTHROPIC_API_KEY"):
+    MODELS["claude-3-sonnet"] = AnthropicModel("claude-3-5-sonnet-20241022")
+
+if os.getenv("AZURE_OPENAI_API_KEY"):
+    # For Azure OpenAI, we'll use the OpenAI model with Azure credentials
+    # The Azure configuration will be handled via environment variables
+    azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4")
+    
+    MODELS["azure-gpt-4"] = OpenAIModel(azure_deployment)
+    if os.getenv("AZURE_DEPLOYMENT_NAME_35"):
+        MODELS["azure-gpt-35"] = OpenAIModel(os.getenv("AZURE_DEPLOYMENT_NAME_35"))
+    else:
+        MODELS["azure-gpt-35"] = OpenAIModel(azure_deployment)
+
+# Ensure we have at least one model
+if not MODELS:
+    print("Warning: No AI provider API keys found. Service will run in limited mode.")
+    raise RuntimeError("No AI models available. Please set AZURE_OPENAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY environment variables.")
 
 # Request/Response models
 class ChatRequest(BaseModel):
@@ -106,10 +115,15 @@ class ModelRouter:
             "azure-gpt-4": {"input": 0.03, "output": 0.06},
             "azure-gpt-35": {"input": 0.002, "output": 0.002}
         }
-        self.fallback_chain = [
-            "gpt-4o", "azure-gpt-4", "claude-3-sonnet", 
-            "gpt-3.5-turbo", "azure-gpt-35"
+        # Create fallback chain from available models
+        available_models = list(MODELS.keys())
+        preference_order = [
+            "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
+            "gpt-3.5-turbo", "claude-3-sonnet"
         ]
+        self.fallback_chain = [model for model in preference_order if model in available_models]
+        # Add any remaining models
+        self.fallback_chain.extend([model for model in available_models if model not in self.fallback_chain])
     
     def get_model(self, preference: str) -> tuple[Model, str]:
         """Get model with fallback logic, return model and actual name used"""
@@ -127,11 +141,16 @@ class ModelRouter:
         """Check model health periodically"""
         for name, model in MODELS.items():
             try:
-                # Test with minimal Agent request using correct pydantic-ai API
-                from pydantic_ai import Agent
-                test_agent = Agent(model, output_type=str)
+                # Create a simple agent for health check
+                health_agent = Agent(
+                    model,
+                    output_type=str,
+                    system_prompt="You are a health check agent. Respond briefly."
+                )
+                
+                # Test with minimal request
                 test_response = await asyncio.wait_for(
-                    test_agent.run("Hi"),
+                    health_agent.run("Hi"),
                     timeout=10.0
                 )
                 self.model_health[name] = True

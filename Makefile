@@ -2,9 +2,11 @@
 
 # Compose helpers
 COMPOSE_BUILDX := docker compose -f docker-compose.buildx.yml
+COMPOSE_BUILDX_EXTERNAL := docker compose -f docker-compose.buildx.yml -f docker-compose.external-es.yml
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_DEV_EXTERNAL := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.external-es.yml
 
-.PHONY: help build buildx push up dev-up down logs ps health init-keycloak clean prune
+.PHONY: help build buildx push up dev-up up-external dev-up-external down logs ps health init-keycloak clean prune
 .PHONY: smoke-ai smoke-all
 
 
@@ -16,7 +18,9 @@ help:
 	@echo "  buildx        Build images using docker-compose.buildx.yml"
 	@echo "  push          Push built images (requires REGISTRY and VERSION)"
 	@echo "  up            Start production stack (docker-compose.buildx.yml)"
+	@echo "  up-external   Start production stack with external Elasticsearch"
 	@echo "  dev-up        Start dev stack (docker-compose.yml + docker-compose.dev.yml)"
+	@echo "  dev-up-external Start dev stack with external Elasticsearch"
 	@echo "  down          Stop all services"
 	@echo "  logs [service] Follow logs; optionally set service=name"
 	@echo "  ps            Show containers"
@@ -26,9 +30,13 @@ help:
 	@echo "  prune         Docker system prune -af"
 	@echo ""
 	@echo "Environment variables: REGISTRY, VERSION, ADMIN_TOKEN, EXTERNAL_ELASTICSEARCH_URL"
+	@echo ""
+	@echo "External Elasticsearch Usage:"
+	@echo "  Set EXTERNAL_ELASTICSEARCH_URL in .env to your Elasticsearch instance URL"
+	@echo "  Then use 'make up-external' or 'make dev-up-external' to skip local ES container"
+	@echo "  Example: EXTERNAL_ELASTICSEARCH_URL=https://your-es-cluster.com"
 
 build:
-	@chmod +x build-scripts/build.sh
 	@chmod +x build-scripts/build.sh
 	@SERVICES="$${SERVICES:-frontend,bff-service,auth-service,security-service}" bash build-scripts/build.sh
 
@@ -60,6 +68,17 @@ if [ -n "${EXTERNAL_ELASTICSEARCH_URL-}" ]; then \
 		$(COMPOSE_BUILDX) up -d; \
 	fi'
 
+up-external:
+	@echo "Starting production stack with external Elasticsearch..."
+	@if [ -f .env ]; then export $$(grep -v '^#' .env | xargs) && export EXTERNAL_ELASTICSEARCH_URL; fi; \
+	if [ -z "$${EXTERNAL_ELASTICSEARCH_URL}" ]; then \
+		echo "ERROR: EXTERNAL_ELASTICSEARCH_URL not set in .env file"; \
+		echo "Please set it to your external Elasticsearch URL"; \
+		exit 1; \
+	fi; \
+	echo "Using external Elasticsearch at $${EXTERNAL_ELASTICSEARCH_URL}"; \
+	$(COMPOSE_BUILDX_EXTERNAL) up -d --remove-orphans
+
 
 dev-up:
 	@bash -c '\
@@ -71,6 +90,17 @@ if [ -n "${EXTERNAL_ELASTICSEARCH_URL-}" ]; then \
 	else \
 		$(COMPOSE_DEV) up -d; \
 	fi'
+
+dev-up-external:
+	@echo "Starting development stack with external Elasticsearch..."
+	@if [ -f .env ]; then export $$(grep -v '^#' .env | xargs) && export EXTERNAL_ELASTICSEARCH_URL; fi; \
+	if [ -z "$${EXTERNAL_ELASTICSEARCH_URL}" ]; then \
+		echo "ERROR: EXTERNAL_ELASTICSEARCH_URL not set in .env file"; \
+		echo "Please set it to your external Elasticsearch URL"; \
+		exit 1; \
+	fi; \
+	echo "Using external Elasticsearch at $${EXTERNAL_ELASTICSEARCH_URL}"; \
+	$(COMPOSE_DEV_EXTERNAL) up -d --remove-orphans
 
 down:
 	@docker-compose down

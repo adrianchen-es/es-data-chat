@@ -12,7 +12,7 @@ RUN apk add --no-cache \
 # System dependencies for cryptography
 RUN apk add --no-cache \
     gcc \
-    g++ \
+    g++
 
 FROM base AS dependencies
 WORKDIR /app
@@ -24,12 +24,12 @@ COPY requirements.txt ./
 RUN apk add --no-cache py3-pip py3-setuptools py3-wheel
 
 RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install -r requirements.txt
 
 FROM dependencies AS build
 WORKDIR /app
 
-# Copy source after dependencies
 # Copy source after dependencies
 COPY src/ src/
 
