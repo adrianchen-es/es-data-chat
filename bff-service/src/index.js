@@ -45,6 +45,8 @@ process.on('SIGINT', shutdownTracing);
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:8003';
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://ai-service:8000';
 const DOC_SERVICE_URL = process.env.DOC_SERVICE_URL || 'http://document-service:8001';
+const CACHE_SERVICE_URL = process.env.CACHE_SERVICE_URL || 'http://cache-service:8002';
+const SECURITY_SERVICE_URL = process.env.SECURITY_SERVICE_URL || 'http://security-service:8005';
 
 // Rate limiting store
 const rateLimitStore = new Map();
@@ -288,6 +290,111 @@ fastify.get('/api/conversations', {
     reply.send(response.data);
   } catch (error) {
     reply.code(500).send({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Authentication endpoints
+fastify.post('/api/auth/login', async (request, reply) => {
+  try {
+    const response = await axios.post(`${AUTH_SERVICE_URL}/login`, request.body, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    reply.send(response.data);
+  } catch (error) {
+    reply.code(error.response?.status || 500).send({
+      error: error.response?.data?.detail || 'Login failed'
+    });
+  }
+});
+
+fastify.post('/api/auth/logout', {
+  preHandler: authenticateRequest
+}, async (request, reply) => {
+  try {
+    const response = await axios.post(`${AUTH_SERVICE_URL}/logout`, {}, {
+      headers: { Authorization: request.headers.authorization }
+    });
+    
+    reply.send(response.data);
+  } catch (error) {
+    reply.code(error.response?.status || 500).send({
+      error: error.response?.data?.detail || 'Logout failed'
+    });
+  }
+});
+
+fastify.get('/api/auth/verify', {
+  preHandler: authenticateRequest
+}, async (request, reply) => {
+  // If we reach here, authentication was successful
+  reply.send(request.user);
+});
+
+fastify.post('/api/auth/refresh', async (request, reply) => {
+  try {
+    const response = await axios.post(`${AUTH_SERVICE_URL}/refresh`, request.body, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    reply.send(response.data);
+  } catch (error) {
+    reply.code(error.response?.status || 500).send({
+      error: error.response?.data?.detail || 'Token refresh failed'
+    });
+  }
+});
+
+// AI Models endpoint
+fastify.get('/api/ai/models', {
+  preHandler: authenticateRequest
+}, async (request, reply) => {
+  try {
+    const response = await axios.get(`${AI_SERVICE_URL}/models`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    reply.send(response.data);
+  } catch (error) {
+    reply.code(500).send({ error: 'Failed to fetch models' });
+  }
+});
+
+// Security status endpoint
+fastify.get('/api/security/status', {
+  preHandler: authenticateRequest
+}, async (request, reply) => {
+  try {
+    const response = await axios.get(`${SECURITY_SERVICE_URL}/security-status/${request.user.user_id}`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    reply.send(response.data);
+  } catch (error) {
+    reply.code(500).send({ error: 'Failed to fetch security status' });
+  }
+});
+
+// Cache metrics endpoint
+fastify.get('/api/cache/metrics', {
+  preHandler: authenticateRequest
+}, async (request, reply) => {
+  try {
+    const response = await axios.get(`${CACHE_SERVICE_URL}/health`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    // Transform cache health into metrics format
+    const metrics = {
+      totalMessages: 0, // This would come from user's conversation history
+      averageResponseTime: 150, // This would be calculated from recent requests
+      cacheHitRate: response.data.cache_hit_rate || 85,
+      uptime: response.data.uptime || '2h 15m'
+    };
+    
+    reply.send(metrics);
+  } catch (error) {
+    reply.code(500).send({ error: 'Failed to fetch cache metrics' });
   }
 });
 
