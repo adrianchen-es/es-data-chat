@@ -1,6 +1,11 @@
 // frontend/src/App.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Upload, Activity, AlertCircle, CheckCircle } from 'lucide-react';
+import { 
+  Send, Upload, Activity, AlertCircle, CheckCircle, 
+  Menu, X, Settings, MessageSquare, FileText, Zap,
+  Clock, Database, Shield, TrendingUp, Maximize2, Minimize2
+} from 'lucide-react';
+import clsx from 'clsx';
 
 interface Message {
   id: string;
@@ -8,6 +13,12 @@ interface Message {
   isUser: boolean;
   timestamp: Date;
   isStreaming?: boolean;
+  metadata?: {
+    model?: string;
+    confidence?: number;
+    sources?: string[];
+    processingTime?: number;
+  };
 }
 
 interface HealthStatus {
@@ -15,8 +26,17 @@ interface HealthStatus {
   services: {
     api: boolean;
     ai: boolean;
-    search: boolean;
+    auth: boolean;
+    documents: boolean;
   };
+  timestamp: string;
+}
+
+interface SystemMetrics {
+  totalMessages: number;
+  averageResponseTime: number;
+  cacheHitRate: number;
+  uptime: string;
 }
 
 const ChatApp: React.FC = () => {
@@ -25,78 +45,158 @@ const ChatApp: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({
     status: 'healthy',
-    services: { api: true, ai: true, search: true }
+    services: { api: true, ai: true, auth: true, documents: true },
+    timestamp: new Date().toISOString()
   });
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
+    totalMessages: 0,
+    averageResponseTime: 0,
+    cacheHitRate: 85,
+    uptime: '2h 15m'
+  });
+  
+  // UI State
+  const [showSidebar, setShowSidebar] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [lastResponse, setLastResponse] = useState('');
-  const [lastQuery, setLastQuery] = useState('');
-  const [debugData, setDebugData] = useState<any>({});
+  const [fullscreen, setFullscreen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [securityAlert, setSecurityAlert] = useState<string>('');
+  const [lastQuery, setLastQuery] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load chat history on mount
-  useEffect(() => {
-    const savedMessages = localStorage.getItem('chat-history');
-    if (savedMessages) {
-      setMessages(JSON.parse(savedMessages));
+  // Initialize telemetry (simplified for now due to dependency issues)
+  const trackUserAction = useCallback((action: string, metadata?: any) => {
+    console.log(`[TRACE] User action: ${action}`, metadata);
+    // This would integrate with OpenTelemetry when dependencies are available
+  }, []);
+
+  const trackApiCall = useCallback(async (endpoint: string, method: string, apiCall: () => Promise<any>) => {
+    const startTime = Date.now();
+    console.log(`[TRACE] API call started: ${method} ${endpoint}`);
+    
+    try {
+      const result = await apiCall();
+      const duration = Date.now() - startTime;
+      console.log(`[TRACE] API call completed: ${method} ${endpoint} (${duration}ms)`);
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.log(`[TRACE] API call failed: ${method} ${endpoint} (${duration}ms)`, error);
+      throw error;
     }
   }, []);
 
-  // Save chat history
+  // Load chat history and preferences
+  useEffect(() => {
+    trackUserAction('app_load');
+    
+    const savedMessages = localStorage.getItem('chat-history');
+    const savedDarkMode = localStorage.getItem('dark-mode') === 'true';
+    
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
+    }
+    setDarkMode(savedDarkMode);
+    
+    // Apply dark mode class
+    if (savedDarkMode) {
+      document.documentElement.classList.add('dark');
+    }
+  }, [trackUserAction]);
+
+  // Save chat history and preferences
   useEffect(() => {
     localStorage.setItem('chat-history', JSON.stringify(messages));
+    setSystemMetrics(prev => ({ ...prev, totalMessages: messages.filter(m => m.isUser).length }));
   }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem('dark-mode', darkMode.toString());
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Health check simulation
+  // Health check with proper error handling
   useEffect(() => {
-    const checkHealth = () => {
-      fetch('/api/health')
-        .then(res => res.json())
-        .then(data => setHealthStatus(data))
-        .catch(() => setHealthStatus({
+    const checkHealth = async () => {
+      try {
+        const response = await trackApiCall('/api/health', 'GET', () => 
+          fetch('/api/health').then(res => res.json())
+        );
+        setHealthStatus(response);
+      } catch (error) {
+        console.warn('Health check failed:', error);
+        setHealthStatus({
           status: 'unhealthy',
-          services: { api: false, ai: false, search: false }
-        }));
+          services: { api: false, ai: false, auth: false, documents: false },
+          timestamp: new Date().toISOString()
+        });
+      }
     };
     
     checkHealth();
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [trackApiCall]);
 
-  const simulateStreaming = async (response: string) => {
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        switch (e.key) {
+          case 'k':
+            e.preventDefault();
+            inputRef.current?.focus();
+            break;
+          case 'd':
+            e.preventDefault();
+            setShowDebug(!showDebug);
+            break;
+          case 'Enter':
+            e.preventDefault();
+            handleSendMessage();
+            break;
+        }
+      }
+      if (e.key === 'Escape') {
+        setShowSidebar(false);
+        setSecurityAlert('');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [showDebug]);
+
+  const simulateStreamingResponse = async (response: string, messageId: string) => {
     const words = response.split(' ');
     let currentContent = '';
+    const delay = 30; // Faster streaming for better UX
     
-    const streamingId = Date.now().toString();
-    setMessages(prev => [...prev, {
-      id: streamingId,
-      content: '',
-      isUser: false,
-      timestamp: new Date(),
-      isStreaming: true
-    }]);
-
     for (let i = 0; i < words.length; i++) {
       currentContent += words[i] + ' ';
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, delay));
       
       setMessages(prev => prev.map(msg => 
-        msg.id === streamingId 
+        msg.id === messageId 
           ? { ...msg, content: currentContent.trim() }
           : msg
       ));
     }
 
     setMessages(prev => prev.map(msg => 
-      msg.id === streamingId 
+      msg.id === messageId 
         ? { ...msg, isStreaming: false }
         : msg
     ));
@@ -105,85 +205,121 @@ const ChatApp: React.FC = () => {
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() || isLoading) return;
 
+    trackUserAction('send_message', { messageLength: inputValue.length });
+    
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       content: inputValue,
       isUser: true,
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const assistantMessageId = `assistant-${Date.now()}`;
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      content: '',
+      isUser: false,
+      timestamp: new Date(),
+      isStreaming: true
+    };
+
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
+    setLastQuery(inputValue);
     setInputValue('');
     setIsLoading(true);
 
     try {
-      // Mock AI response with debug data
-      const mockResponse = `I understand you're asking about "${inputValue}". This is a mock response that demonstrates the streaming functionality. In the full implementation, this would connect to the AI service with RAG capabilities and provide intelligent responses based on your data.`;
+      // Enhanced mock response with better AI-like behavior
+      const responses = [
+        `I understand you're asking about "${inputValue}". Based on my analysis of your data, I can provide several insights. This response demonstrates the streaming functionality and would normally connect to our AI service with RAG capabilities.`,
+        `Great question about "${inputValue}"! Let me search through your documents and provide a comprehensive answer. The system is designed to provide intelligent responses based on your specific data sources and context.`,
+        `I've analyzed your query regarding "${inputValue}". Here are the key findings from your document corpus: This would include relevant excerpts, citations, and actionable insights in a production environment.`,
+      ];
       
-      const mockDebugData = {
-        model_used: 'gpt-4o',
-        processing_time_ms: 1200,
-        rag_sources: ['document1.pdf', 'document2.docx'],
-        elasticsearch_query: {
-          query: { multi_match: { query: inputValue, fields: ['content^2', 'title'] } },
-          size: 10
-        },
-        confidence: 0.85,
-        cached: false
+      const mockResponse = responses[Math.floor(Math.random() * responses.length)];
+      
+      const mockMetadata = {
+        model: ['gpt-4o', 'claude-3', 'gpt-4-turbo'][Math.floor(Math.random() * 3)],
+        confidence: 0.75 + Math.random() * 0.2,
+        sources: ['document1.pdf', 'document2.docx', 'knowledge-base.md'].slice(0, Math.floor(Math.random() * 3) + 1),
+        processingTime: 800 + Math.random() * 1200
       };
+
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      setLastResponse(mockResponse);
-      setLastQuery(inputValue);
-      setDebugData(mockDebugData);
+      // Update message with metadata
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId 
+          ? { ...msg, metadata: mockMetadata }
+          : msg
+      ));
       
-      // Clear any previous security alerts
+      // Start streaming
+      await simulateStreamingResponse(mockResponse, assistantMessageId);
+      
+      // Update metrics
+      setSystemMetrics(prev => ({
+        ...prev,
+        averageResponseTime: Math.round((prev.averageResponseTime + mockMetadata.processingTime) / 2)
+      }));
+      
       setSecurityAlert('');
-      
-      await simulateStreaming(mockResponse);
     } catch (error: any) {
+      console.error('Error sending message:', error);
+      
       let errorMessage = 'Sorry, I encountered an error. Please try again.';
       
-      // Handle security-related errors
       if (error.status === 403) {
-        const errorData = error.data || {};
-        if (errorData.details?.code?.startsWith('SEC_')) {
-          setSecurityAlert(errorData.details.message + ' ' + errorData.details.suggestion);
-          errorMessage = errorData.details.message;
-        } else {
-          setSecurityAlert('Your message was blocked by security filters. Please rephrase and try again.');
-          errorMessage = 'Message blocked for security reasons.';
-        }
+        setSecurityAlert('Your message was blocked by security filters. Please rephrase and try again.');
+        errorMessage = 'Message blocked for security reasons.';
       } else if (error.status === 429) {
         setSecurityAlert('You are sending messages too quickly. Please wait a moment before trying again.');
         errorMessage = 'Rate limit exceeded. Please wait.';
       }
       
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        content: errorMessage,
-        isUser: false,
-        timestamp: new Date()
-      }]);
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId 
+          ? { ...msg, content: errorMessage, isStreaming: false }
+          : msg
+      ));
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading]);
+  }, [inputValue, isLoading, trackUserAction]);
 
   const handleFileUpload = () => {
+    trackUserAction('file_upload_click');
     fileInputRef.current?.click();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Mock file upload
+      trackUserAction('file_selected', { 
+        fileName: file.name, 
+        fileSize: file.size,
+        fileType: file.type 
+      });
+      
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        content: `Uploaded file: ${file.name} (${(file.size / 1024).toFixed(1)} KB). File processing will be implemented in the backend service.`,
+        id: `file-${Date.now()}`,
+        content: `📁 Uploaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)\n\nFile processing will be implemented in the document service. Supported formats: PDF, DOCX, PPTX, TXT.`,
         isUser: false,
         timestamp: new Date()
       }]);
     }
+  };
+
+  const clearChat = () => {
+    trackUserAction('clear_chat');
+    setMessages([]);
+    setLastQuery('');
+  };
+
+  const toggleSidebar = () => {
+    trackUserAction('toggle_sidebar');
+    setShowSidebar(!showSidebar);
   };
 
   const getHealthIcon = () => {
@@ -197,167 +333,368 @@ const ChatApp: React.FC = () => {
     }
   };
 
+  const formatUptime = (timestamp: string) => {
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+  };
+
+  const themeClasses = darkMode ? 'dark bg-gray-900' : 'bg-gray-50';
+  const surfaceClasses = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const textClasses = darkMode ? 'text-gray-100' : 'text-gray-900';
+  const mutedTextClasses = darkMode ? 'text-gray-400' : 'text-gray-600';
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900">AI Chat</h1>
-          <div className="flex items-center gap-2">
-            {getHealthIcon()}
+    <div className={clsx('flex h-screen', themeClasses, { 'fixed inset-0 z-50': fullscreen })}>
+      {/* Sidebar */}
+      <div className={clsx(
+        'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform lg:translate-x-0 lg:static lg:inset-0',
+        surfaceClasses,
+        showSidebar ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className={clsx('text-lg font-semibold', textClasses)}>ES Data Chat</h2>
+          <button
+            onClick={() => setShowSidebar(false)}
+            className="lg:hidden p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* System Status */}
+          <div className="space-y-2">
+            <h3 className={clsx('text-sm font-medium', textClasses)}>System Status</h3>
+            <div className="flex items-center gap-2">
+              {getHealthIcon()}
+              <span className={clsx('text-sm', mutedTextClasses)}>
+                {healthStatus.status.charAt(0).toUpperCase() + healthStatus.status.slice(1)}
+              </span>
+            </div>
+            <div className="text-xs space-y-1">
+              {Object.entries(healthStatus.services).map(([service, status]) => (
+                <div key={service} className="flex justify-between">
+                  <span className={mutedTextClasses}>{service}:</span>
+                  <span className={status ? 'text-green-500' : 'text-red-500'}>
+                    {status ? '✓' : '✗'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Metrics */}
+          <div className="space-y-2">
+            <h3 className={clsx('text-sm font-medium', textClasses)}>Metrics</h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-3 h-3" />
+                <span className={mutedTextClasses}>{systemMetrics.totalMessages} messages</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-3 h-3" />
+                <span className={mutedTextClasses}>{systemMetrics.averageResponseTime}ms avg</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Database className="w-3 h-3" />
+                <span className={mutedTextClasses}>{systemMetrics.cacheHitRate}% cache hit</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-3 h-3" />
+                <span className={mutedTextClasses}>Uptime: {formatUptime(healthStatus.timestamp)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-2">
+            <button
+              onClick={clearChat}
+              className={clsx(
+                'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
+                mutedTextClasses
+              )}
+            >
+              Clear Chat
+            </button>
             <button
               onClick={() => setShowDebug(!showDebug)}
-              className="p-1 hover:bg-gray-100 rounded"
+              className={clsx(
+                'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
+                mutedTextClasses
+              )}
             >
-              <Activity className="w-4 h-4 text-gray-600" />
+              {showDebug ? 'Hide' : 'Show'} Debug
+            </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={clsx(
+                'w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
+                mutedTextClasses
+              )}
+            >
+              {darkMode ? 'Light' : 'Dark'} Mode
             </button>
           </div>
         </div>
       </div>
 
-      {/* Security Alert */}
-      {securityAlert && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-2">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-700">{securityAlert}</p>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className={clsx('border-b px-4 py-3', surfaceClasses)}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setSecurityAlert('')}
-                className="mt-2 text-xs text-yellow-600 hover:text-yellow-800 underline"
+                onClick={toggleSidebar}
+                className="lg:hidden p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                Dismiss
+                <Menu className="w-5 h-5" />
+              </button>
+              <h1 className={clsx('text-lg font-semibold', textClasses)}>AI Assistant</h1>
+              {isLoading && (
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-75"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-150"></div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {getHealthIcon()}
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <Activity className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setFullscreen(!fullscreen)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Enhanced Debug Panel */}
-      {showDebug && (
-        <div className="bg-gray-100 border-b border-gray-200 p-3 text-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="mb-2"><strong>System Status:</strong> {healthStatus.status}</div>
-              <div className="mb-2">
-                <strong>Services:</strong> API: {healthStatus.services.api ? '✓' : '✗'}, 
-                AI: {healthStatus.services.ai ? '✓' : '✗'}, 
-                Search: {healthStatus.services.search ? '✓' : '✗'}
+        {/* Security Alert */}
+        {securityAlert && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 mx-4 mt-2">
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-yellow-400 flex-shrink-0" />
+              <div className="ml-3 flex-1">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">{securityAlert}</p>
+                <button
+                  onClick={() => setSecurityAlert('')}
+                  className="mt-2 text-xs text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200 underline"
+                >
+                  Dismiss
+                </button>
               </div>
-              {debugData.model_used && (
-                <div className="mb-2">
-                  <strong>Model:</strong> {debugData.model_used} | 
-                  <strong> Time:</strong> {debugData.processing_time_ms}ms | 
-                  <strong> Confidence:</strong> {(debugData.confidence * 100).toFixed(1)}%
-                </div>
-              )}
             </div>
-            <div>
-              {debugData.rag_sources && debugData.rag_sources.length > 0 && (
-                <div className="mb-2">
-                  <strong>RAG Sources:</strong> {debugData.rag_sources.join(', ')}
-                </div>
-              )}
-              {debugData.cached && (
-                <div className="mb-1"><span className="bg-green-200 px-2 py-1 rounded text-xs">CACHED</span></div>
-              )}
-            </div>
-          </div>
-          
-          {lastResponse && (
-            <details className="mt-3">
-              <summary className="cursor-pointer font-medium text-blue-600">Last AI Response</summary>
-              <pre className="mt-2 p-2 bg-white rounded text-xs overflow-x-auto max-h-32">
-{lastResponse}
-              </pre>
-            </details>
-          )}
-          
-          {debugData.elasticsearch_query && (
-            <details className="mt-2">
-              <summary className="cursor-pointer font-medium text-purple-600">Elasticsearch Query</summary>
-              <pre className="mt-2 p-2 bg-white rounded text-xs overflow-x-auto max-h-32">
-{JSON.stringify(debugData.elasticsearch_query, null, 2)}
-              </pre>
-            </details>
-          )}
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center text-gray-500 mt-8">
-            <p>Start a conversation or upload a document to begin.</p>
           </div>
         )}
-        
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl rounded-lg px-4 py-2 ${
-                message.isUser
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white text-gray-900 border border-gray-200'
-              }`}
-            >
-              <p className="text-sm">{message.content}</p>
-              {message.isStreaming && (
-                <div className="mt-1 flex items-center gap-1">
-                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse"></div>
-                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-75"></div>
-                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-150"></div>
+
+        {/* Debug Panel */}
+        {showDebug && (
+          <div className={clsx('border-b p-3 text-sm', surfaceClasses)}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="mb-2">
+                  <strong>System:</strong> {healthStatus.status} | 
+                  <strong> Messages:</strong> {systemMetrics.totalMessages} |
+                  <strong> Avg Response:</strong> {systemMetrics.averageResponseTime}ms
                 </div>
-              )}
-              <p className="text-xs opacity-75 mt-1">
-                {message.timestamp.toLocaleTimeString()}
-              </p>
+                {lastQuery && (
+                  <div className="mb-2">
+                    <strong>Last Query:</strong> <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{lastQuery}</code>
+                  </div>
+                )}
+              </div>
+              <div className="text-xs">
+                <div><strong>Shortcuts:</strong></div>
+                <div>⌘/Ctrl + K: Focus input</div>
+                <div>⌘/Ctrl + D: Toggle debug</div>
+                <div>⌘/Ctrl + Enter: Send message</div>
+                <div>Esc: Close panels</div>
+              </div>
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+        )}
 
-      {/* Input */}
-      <div className="bg-white border-t border-gray-200 p-4">
-        <div className="flex items-center gap-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".pdf,.docx,.doc,.pptx,.ppt"
-            className="hidden"
-          />
-          <button
-            onClick={handleFileUpload}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
-            disabled={isLoading}
-          >
-            <Upload className="w-5 h-5" />
-          </button>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Ask a question or type a message..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isLoading}
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isLoading}
-            className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center mt-8">
+              <div className="mb-4">
+                <Zap className="w-12 h-12 mx-auto text-blue-500 mb-4" />
+                <h3 className={clsx('text-lg font-medium mb-2', textClasses)}>
+                  Welcome to ES Data Chat
+                </h3>
+                <p className={mutedTextClasses}>
+                  Start a conversation, upload documents, or ask questions about your data.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                {[
+                  'What can you help me with?',
+                  'Analyze my documents',
+                  'Show me insights from my data'
+                ].map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInputValue(suggestion)}
+                    className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={clsx(
+                  'max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl rounded-lg px-4 py-3',
+                  message.isUser
+                    ? 'bg-blue-500 text-white'
+                    : clsx(surfaceClasses, 'shadow-sm')
+                )}
+              >
+                <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                
+                {message.isStreaming && (
+                  <div className="mt-2 flex items-center gap-1">
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse"></div>
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-75"></div>
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-150"></div>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs opacity-75">
+                    {message.timestamp.toLocaleTimeString()}
+                  </p>
+                  
+                  {message.metadata && !message.isUser && (
+                    <div className="flex items-center gap-1 text-xs opacity-75">
+                      {message.metadata.model && (
+                        <span className="bg-black/10 px-1 rounded">{message.metadata.model}</span>
+                      )}
+                      {message.metadata.confidence && (
+                        <span>{Math.round(message.metadata.confidence * 100)}%</span>
+                      )}
+                      {message.metadata.processingTime && (
+                        <span>{Math.round(message.metadata.processingTime)}ms</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {message.metadata?.sources && message.metadata.sources.length > 0 && (
+                  <div className="mt-2 text-xs opacity-75">
+                    <div className="flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      <span>Sources: {message.metadata.sources.join(', ')}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className={clsx('border-t p-4', surfaceClasses)}>
+          <div className="flex items-end gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
+              className="hidden"
+            />
+            <button
+              onClick={handleFileUpload}
+              disabled={isLoading}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50"
+            >
+              <Upload className="w-5 h-5" />
+            </button>
+            <div className="flex-1">
+              <textarea
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ask a question or type a message... (⌘+K to focus, ⌘+Enter to send)"
+                className={clsx(
+                  'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none',
+                  'min-h-[40px] max-h-32',
+                  surfaceClasses,
+                  textClasses
+                )}
+                disabled={isLoading}
+                rows={1}
+                style={{ 
+                  height: 'auto',
+                  minHeight: '40px',
+                  maxHeight: '128px'
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isLoading}
+              className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4">
+              <span>Supports: PDF, DOCX, PPTX, TXT, MD</span>
+              {systemMetrics.cacheHitRate > 0 && (
+                <span className="flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  {systemMetrics.cacheHitRate}% cached
+                </span>
+              )}
+            </div>
+            <span>
+              Shift+Enter for new line
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Mobile sidebar overlay */}
+      {showSidebar && (
+        <div
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setShowSidebar(false)}
+        />
+      )}
     </div>
   );
 };
