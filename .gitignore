@@ -9,6 +9,7 @@ build-manifest.json
 
 # Nodejs
 node_modules/*
+*/package-lock.json
 frontend/node_modules/*
 frontend/npm-debug.log
 frontend/package-lock.json
@@ -222,4 +223,3 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-frontend/package-lock.json
