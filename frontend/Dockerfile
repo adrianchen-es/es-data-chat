@@ -45,7 +45,7 @@ COPY --from=build --chown=nodejs:nodejs /app/build /usr/share/nginx/html
 
 # Custom nginx configuration for SPA
 RUN echo 'server { \
-    listen 8080; \
+    listen 8080 http2; \
     location / { \
         root /usr/share/nginx/html; \
         try_files $uri $uri/ /index.html; \
@@ -63,8 +63,9 @@ RUN mkdir -p /var/cache/nginx/client_temp \
              /var/cache/nginx/proxy_temp \
              /var/cache/nginx/fastcgi_temp \
              /var/cache/nginx/uwsgi_temp \
-             /var/cache/nginx/scgi_temp && \
-    chown -R nodejs:nodejs /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
+             /var/cache/nginx/scgi_temp \
+             /run && \
+    chown -R nodejs:nodejs /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /run
 
 USER nodejs
 EXPOSE 8080
