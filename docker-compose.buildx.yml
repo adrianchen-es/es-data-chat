@@ -102,13 +102,13 @@ services:
       - bff-service
 
   # Infrastructure services (unchanged)
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
@@ -137,7 +137,7 @@ services:
       - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
 
 volumes:
-  es_data:
+  # es_data:
   qdrant_data:
   redis_data:
   keycloak_db_data:

@@ -195,7 +195,7 @@ services:
     #   - elasticsearch
 
 volumes:
-  es_data:
+  # es_data:
   qdrant_data:
   redis_data:
   doc_uploads:
