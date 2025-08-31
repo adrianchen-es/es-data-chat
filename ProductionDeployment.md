@@ -22,6 +22,11 @@ git clone <repository-url>
 cd ai-chat-application
 cp .env.example .env
 # Edit .env with your API keys and configuration
+
+# Frontend Environment Configuration
+# Ensure frontend is configured for production (uses relative URLs by default)
+echo "REACT_APP_API_URL=/api" > frontend/.env
+# Development override will use frontend/.env.development automatically
 ```
 
 ### 2. Build Multi-Platform Images
@@ -42,6 +47,11 @@ export VERSION=1.0.0
 # If you have an external Elasticsearch instance, export it so the compose stack will skip local ES
 # Example: export EXTERNAL_ELASTICSEARCH_URL=http://es-host:9200
 docker-compose -f docker-compose.buildx.yml up -d
+
+# Verify WAF routing is working (production setup)
+# Frontend: http://localhost/ → Static React app
+# API: http://localhost/api/* → BFF service with rate limiting
+# Streaming: http://localhost/api/chat/stream → SSE optimized
 ```
 
 ### 4. Initialize Keycloak
@@ -65,11 +75,24 @@ curl -X POST http://localhost:8080/auth/admin/realms \
   }'
 ```
 
+### 5. Verify Frontend Configuration
+```bash
+# Frontend automatically configured for production:
+# - Uses relative URLs (/api) that route through WAF
+# - Static assets served with gzip compression
+# - Content Security Policy configured
+# - Environment-aware API configuration
+
+# Test single-domain access (production setup)
+curl -f http://localhost/ | grep -q "ES Data Assistant"
+curl -f http://localhost/api/health
+```
+
 ## Health Verification
 
 ### Service Health Checks
 ```bash
-# Check all 10 services
+# Check all 10 services including frontend routing
 services=("waf:80" "frontend:3000" "bff-service:3001" "ai-service:8000" 
           "document-service:8001" "cache-service:8002" "auth-service:8003"
           "vector-service:8004" "security-service:8005")
@@ -84,6 +107,11 @@ for service in "${services[@]}"; do
     curl -f http://localhost:$port/health || echo "$name unhealthy"
   fi
 done
+
+# Test WAF routing specifically
+echo "Testing WAF routing..."
+curl -f http://localhost/api/health || echo "WAF API routing unhealthy"
+curl -f http://localhost/ | grep -q "ES Data Assistant" || echo "Frontend serving unhealthy"
 
 # Infrastructure health — if using an external Elasticsearch, set EXTERNAL_ELASTICSEARCH_URL
 ES_URL=${EXTERNAL_ELASTICSEARCH_URL:-http://localhost:9200}
@@ -109,6 +137,35 @@ curl -X POST http://localhost/api/chat \
 ```
 
 ## Performance Tuning
+
+### Frontend Configuration
+```bash
+# Production build optimization
+cd frontend
+npm run build
+# Static assets served through nginx with gzip compression
+
+# Environment-specific configuration
+# Production: REACT_APP_API_URL=/api (relative URLs through WAF)
+# Development: REACT_APP_API_URL=http://localhost:3001/api (direct BFF access)
+```
+
+### WAF Routing Optimization
+```nginx
+# nginx.conf optimizations already configured
+location /api/chat/stream {
+    # SSE streaming optimization
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 24h;
+}
+
+location /api/documents/upload {
+    # File upload optimization
+    client_max_body_size 50M;
+    proxy_connect_timeout 300s;
+}
+```
 
 ### Elasticsearch Optimization
 ```bash
@@ -144,6 +201,19 @@ TIMEOUT=30
 
 ## Security Configuration
 
+### Frontend Security
+```bash
+# Frontend security features automatically configured:
+# - Content Security Policy for script/style sources
+# - Rate limiting through WAF (15 req/s API, 8 req/s streaming)
+# - Authentication tokens managed securely
+# - CORS handled by WAF configuration
+
+# Environment-specific API configuration:
+# Production: Relative URLs (/api) - works with any domain
+# Development: Direct URLs (http://localhost:3001/api) - bypasses WAF
+```
+
 ### SSL/TLS Setup
 ```bash
 # Generate SSL certificates
@@ -153,6 +223,11 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 
 # Update nginx.conf to enable HTTPS
 sed -i 's/#ssl_certificate/ssl_certificate/' waf/nginx.conf
+
+# Update Content Security Policy for production domain
+# Frontend CSP already configured for https domains
+# Update frontend/.env for production domain if needed:
+# REACT_APP_API_URL=/api (relative URLs work with any domain)
 ```
 
 ### Firewall Rules
@@ -235,6 +310,9 @@ upstream ai_backend {
 2. **AI service 503 errors**: Verify API keys in environment
 3. **Slow responses**: Check Elasticsearch heap size
 4. **WAF blocking valid requests**: Adjust ModSecurity rules
+5. **Frontend API calls failing**: Check WAF routing and CORS configuration
+6. **Development vs Production routing**: Verify environment files (.env vs .env.development)
+7. **CSP violations**: Ensure Content Security Policy allows required domains
 
 ### Log Locations
 ```bash
@@ -261,14 +339,18 @@ df -h
 ## Production Checklist
 
 - [ ] All environment variables configured
+- [ ] Frontend environment files configured (.env for production, .env.development for development)
+- [ ] WAF routing tested (/ → frontend, /api/* → BFF)
 - [ ] SSL certificates installed
 - [ ] Firewall rules applied
+- [ ] Content Security Policy configured
 - [ ] Backup strategy implemented
 - [ ] Monitoring dashboards created
-- [ ] Load testing completed
+- [ ] Load testing completed (including frontend/API routing)
 - [ ] Security scan performed
 - [ ] Documentation updated
 - [ ] Team trained on operations
+- [ ] Single domain deployment verified (e.g., https://myapp.domain.com)
 
 ## Support
 

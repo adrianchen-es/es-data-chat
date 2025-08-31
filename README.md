@@ -24,6 +24,18 @@ WAF → Frontend → BFF → Auth Service
 
 **10 Microservices**: Frontend, BFF, Auth, AI, Document, Cache, Vector, Security, WAF, Observability
 
+### Production-Ready Routing
+- **Single Domain**: All traffic through WAF (e.g., `https://myapp.domain.com`)
+- **Frontend**: Static React app served via nginx
+- **API Routes**: `/api/*` proxied to BFF service with rate limiting
+- **Streaming**: `/api/chat/stream` optimized for Server-Sent Events
+- **Uploads**: `/api/documents/upload` with 50MB file support
+
+### Development vs Production
+- **Development**: Direct API access (`http://localhost:3001/api`)
+- **Production**: Relative URLs (`/api`) routed through WAF
+- **Environment-Aware**: Automatic configuration switching
+
 ## 📋 Requirements
 
 - Docker & Docker Compose
@@ -50,7 +62,9 @@ chmod +x build-scripts/build.sh
 docker-compose up -d
 
 # 4. Access application
+# WAF routes all traffic - single domain in production
 # UI: http://localhost
+# API: http://localhost/api/* (routed to BFF)
 # Keycloak Admin: http://localhost:8080 (admin/admin123)
 ```
 
@@ -80,8 +94,8 @@ chmod +x waf/test-security-rules.sh
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| WAF | 80 | Security gateway with HTTP/2 |
-| Frontend | 3000 | React TypeScript with Tailwind |
+| WAF | 80 | Security gateway with HTTP/2, routes `/api/*` to BFF |
+| Frontend | 3000 | React TypeScript with relative URLs for production |
 | BFF Service | 3001 | Fastify with auth & validation |
 | AI Service | 8000 | Multi-model chat with RAG |
 | Document Service | 8001 | PyMuPDF4LLM processing |
@@ -114,7 +128,16 @@ ELASTICSEARCH_VERIFY_CERTS=false
 CACHE_HIT_THRESHOLD=0.85
 # If you run Elasticsearch externally, set the URL here (Makefile and compose fall back to this):
 EXTERNAL_ELASTICSEARCH_URL=
+
+# Frontend Environment Configuration
+REACT_APP_API_URL=/api                    # Production (relative URLs)
+REACT_APP_API_URL=http://localhost:3001/api  # Development (.env.development)
 ```
+
+### Environment Files
+- **`.env`**: Production configuration with relative URLs
+- **`.env.development`**: Development override for direct BFF access
+- **`.env.local`**: Local developer overrides (git-ignored)
 
 ## 📚 Next Steps
 

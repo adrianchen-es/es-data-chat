@@ -2,9 +2,13 @@
 
 ## All 10 Microservices with Build Files
 
-✅ **Frontend** (React TypeScript - Modular Architecture)
+✅ **Frontend** (React TypeScript - Modular Architecture + Production-Ready Routing)
 - `frontend/Dockerfile` - Multi-stage build with nginx
-- `frontend/package.json` - React dependencies with TypeScript
+- `frontend/package.json` - React dependencies with TypeScript, proxy removed for WAF routing
+- `frontend/.env` - Production config with relative URLs (`/api`)
+- `frontend/.env.development` - Development config with direct BFF access (`http://localhost:3001/api`)
+- **Environment-Aware Configuration**: Automatic switching between development and production
+- **WAF Integration**: Production routing through nginx with rate limiting and security
 - **Modular Components:**
   - `frontend/src/App.tsx` - Main application orchestrator (372 lines, down from 823)
   - `frontend/src/components/Sidebar.tsx` - System status & user info (134 lines)
@@ -15,7 +19,7 @@
   - `frontend/src/components/MessageList.tsx` - Chat display with streaming (140 lines)
   - `frontend/src/components/MessageInput.tsx` - Chat input with file upload (105 lines)
   - `frontend/src/components/LoginForm.tsx` - Authentication form (115 lines)
-  - `frontend/src/services/api.ts` - Centralized API service layer
+  - `frontend/src/services/api.ts` - Environment-aware API service with relative URLs
   - `frontend/src/hooks/useAuth.ts` - Authentication state management
 
 ✅ **BFF Service** (Node.js Fastify)
@@ -46,11 +50,17 @@
 - `security-service/Dockerfile` - Threat detection service
 - `security-service/requirements.txt` - Security analysis libraries
 
-✅ **WAF** (ModSecurity + Nginx)
+✅ **WAF** (ModSecurity + Nginx + Production Routing)
 - `waf/Dockerfile` - OWASP ModSecurity with custom AI rules
-- `waf/nginx.conf` - HTTP/2 optimized with SSL
+- `waf/nginx.conf` - HTTP/2 optimized with SSL, production-ready routing
 - `waf/modsecurity.conf` - Core rule set configuration
 - `waf/custom-rules.conf` - 12 AI-specific security rules
+- **Production Routing Configuration:**
+  - `/` → Frontend static files
+  - `/api/*` → BFF Service with rate limiting (15 req/s)
+  - `/api/chat/stream` → Server-Sent Events optimization
+  - `/api/documents/upload` → File upload with 50MB limit (2 req/s)
+- **Security Features:** WAF protection, rate limiting, SSL termination
 
 ✅ **Infrastructure Services** (External Images)
 - Elasticsearch 8.11.0
@@ -118,12 +128,24 @@ curl -f http://localhost:8080/health            # Keycloak
 
 ### Service Dependencies
 ```
-Frontend → BFF Service → {Auth, AI, Document, Cache, Security} Services
-                    ↓
-              Infrastructure: {Elasticsearch, Qdrant, Redis, Keycloak}
+Frontend → WAF → BFF Service → {Auth, AI, Document, Cache, Security} Services
+                           ↓
+                    Infrastructure: {Elasticsearch, Qdrant, Redis, Keycloak}
 ```
 
-## Frontend Architecture - Modular Design
+### Production Architecture
+```
+Browser → WAF (domain.com) → Frontend Static Files OR BFF Service
+                           ↓
+                    /api/* → BFF Service (rate limited)
+                    /*     → Frontend Container
+```
+
+### Development vs Production Routing
+- **Development**: `Browser → React Dev Server (localhost:3000) → BFF Service (localhost:3001/api)`
+- **Production**: `Browser → WAF (domain.com) → Frontend Container OR BFF Service (/api)`
+
+## Frontend Architecture - Modular Design + Production Routing
 
 ### Architecture Benefits
 - **Maintainability**: Reduced from monolithic 823-line file to 8 focused components (372-line main App)
@@ -131,6 +153,8 @@ Frontend → BFF Service → {Auth, AI, Document, Cache, Security} Services
 - **Testability**: Individual components can be tested in isolation
 - **Reusability**: Modular design allows easy modification and extension
 - **TypeScript Integration**: Full type safety across all components with zero compilation errors
+- **Production Ready**: Environment-aware configuration with WAF integration
+- **Single Domain Deployment**: Relative URLs for seamless production deployment
 
 ### Component Responsibilities
 - **App.tsx**: Main orchestrator, state management, component coordination
@@ -144,19 +168,29 @@ Frontend → BFF Service → {Auth, AI, Document, Cache, Security} Services
 - **LoginForm.tsx**: Authentication interface with validation
 
 ### Service Integration Patterns
-- **Centralized API Layer**: `services/api.ts` handles all backend communication
+- **Environment-Aware API Layer**: `services/api.ts` handles development/production routing
 - **Authentication Hook**: `hooks/useAuth.ts` manages authentication state
 - **BFF Communication**: All backend services accessed through BFF layer
+- **WAF Integration**: Production traffic routed through nginx security layer
 - **Real-time Updates**: WebSocket and Server-Sent Events for live data
 - **Error Handling**: Consistent error boundaries and user feedback
 - **OpenTelemetry**: Distributed tracing across frontend and backend services
+
+### Environment Configuration
+- **Development**: Direct BFF access (`http://localhost:3001/api`)
+- **Production**: Relative URLs (`/api`) routed through WAF
+- **Automatic Detection**: Environment-specific configuration loading
+- **Single Domain Ready**: Perfect for `https://myapp.domain.com` deployment
 
 ## Complete File Structure
 ```
 ai-chat-application/
 ├── frontend/
 │   ├── Dockerfile ✅
-│   ├── package.json ✅
+│   ├── package.json ✅ (Proxy removed for WAF routing)
+│   ├── .env ✅ (Production: REACT_APP_API_URL=/api)
+│   ├── .env.development ✅ (Development: REACT_APP_API_URL=http://localhost:3001/api)
+│   ├── README-DEPLOYMENT.md ✅ (Environment configuration guide)
 │   ├── src/
 │   │   ├── App.tsx ✅ (Modular - 372 lines)
 │   │   ├── components/
@@ -170,7 +204,7 @@ ai-chat-application/
 │   │   │   ├── MessageInput.tsx ✅ (Chat input)
 │   │   │   └── LoginForm.tsx ✅ (Authentication)
 │   │   ├── services/
-│   │   │   ├── api.ts ✅ (Centralized API layer)
+│   │   │   ├── api.ts ✅ (Environment-aware API layer)
 │   │   │   └── __tests__/
 │   │   │       └── api.test.ts ✅
 │   │   ├── hooks/
@@ -208,7 +242,7 @@ ai-chat-application/
 │   └── src/main.py ✅
 ├── waf/
 │   ├── Dockerfile ✅
-│   ├── nginx.conf ✅
+│   ├── nginx.conf ✅ (Production routing: / → Frontend, /api/* → BFF)
 │   ├── modsecurity.conf ✅
 │   ├── custom-rules.conf ✅
 │   └── test-security-rules.sh ✅
@@ -223,13 +257,17 @@ ai-chat-application/
 
 ## All Services Ready ✅
 - 10 microservices with complete build configurations
-- **Modular Frontend Architecture**: 8 specialized React components with TypeScript
+- **Production-Ready Frontend Architecture**: Environment-aware configuration with WAF integration
+- **Modular Frontend Design**: 8 specialized React components with TypeScript
+- **Single Domain Deployment**: Relative URLs for seamless production routing
 - Multi-platform Docker builds with BuildKit optimization
-- Comprehensive environment configuration
+- Comprehensive environment configuration (development + production)
 - Production deployment documentation
 - Health monitoring and observability
 - **Frontend Improvements**: 
   - Reduced complexity from 823-line monolith to modular 372-line coordinator
-  - Full service integration via BFF layer
+  - Full service integration via BFF layer with WAF security
+  - Environment-aware API configuration (development/production)
   - Enhanced maintainability and development experience
   - Zero TypeScript compilation errors across all components
+  - Production-ready routing through nginx WAF

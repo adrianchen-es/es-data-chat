@@ -100,8 +100,9 @@ class ApiService {
   private baseUrl: string;
   private authToken: string | null = null;
 
-  constructor(baseUrl: string = 'http://localhost:3001') {
-    this.baseUrl = baseUrl;
+  constructor() {
+    // Use environment variable or default to relative URLs for production
+    this.baseUrl = process.env.REACT_APP_API_URL || '/api';
     this.loadAuthToken();
   }
 
@@ -178,12 +179,12 @@ class ApiService {
 
   // Health and System Status
   async getHealth(): Promise<ApiResponse<HealthStatus>> {
-    return this.request<HealthStatus>('/api/health');
+    return this.request<HealthStatus>('/health');
   }
 
   // Authentication
   async login(username: string, password: string): Promise<ApiResponse<AuthTokens>> {
-    const response = await this.request<AuthTokens>('/api/auth/login', {
+    const response = await this.request<AuthTokens>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
@@ -196,7 +197,7 @@ class ApiService {
   }
 
   async logout(): Promise<ApiResponse<void>> {
-    const response = await this.request<void>('/api/auth/logout', {
+    const response = await this.request<void>('/auth/logout', {
       method: 'POST',
     });
 
@@ -205,7 +206,7 @@ class ApiService {
   }
 
   async refreshToken(): Promise<ApiResponse<AuthTokens>> {
-    const response = await this.request<AuthTokens>('/api/auth/refresh', {
+    const response = await this.request<AuthTokens>('/auth/refresh', {
       method: 'POST',
     });
 
@@ -217,12 +218,12 @@ class ApiService {
   }
 
   async verifyToken(): Promise<ApiResponse<UserInfo>> {
-    return this.request<UserInfo>('/api/auth/verify');
+    return this.request<UserInfo>('/auth/verify');
   }
 
   // Chat functionality
   async sendMessage(request: ChatRequest): Promise<ApiResponse<ChatResponse>> {
-    return this.request<ChatResponse>('/api/chat', {
+    return this.request<ChatResponse>('/chat', {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -247,7 +248,7 @@ class ApiService {
     });
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/chat/stream?${params}`, {
+      const response = await fetch(`${this.baseUrl}/chat/stream?${params}`, {
         headers: this.getHeaders(),
       });
 
@@ -297,9 +298,9 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    return telemetry.measureApiCall('/api/documents/upload', 'POST', async () => {
+    return telemetry.measureApiCall('/documents/upload', 'POST', async () => {
       try {
-        const response = await fetch(`${this.baseUrl}/api/documents/upload`, {
+        const response = await fetch(`${this.baseUrl}/documents/upload`, {
           method: 'POST',
           headers: {
             'Authorization': this.authToken ? `Bearer ${this.authToken}` : '',
@@ -333,22 +334,22 @@ class ApiService {
 
   // Conversations
   async getConversations(): Promise<ApiResponse<Conversation[]>> {
-    return this.request<Conversation[]>('/api/conversations');
+    return this.request<Conversation[]>('/conversations');
   }
 
   // AI Models
   async getModels(): Promise<ApiResponse<{ models: ModelInfo[]; fallback_chain: string[] }>> {
-    return this.request('/api/ai/models');
+    return this.request('/ai/models');
   }
 
   // Security status
   async getSecurityStatus(): Promise<ApiResponse<any>> {
-    return this.request('/api/security/status');
+    return this.request('/security/status');
   }
 
   // Cache metrics
   async getCacheMetrics(): Promise<ApiResponse<SystemMetrics>> {
-    return this.request('/api/cache/metrics');
+    return this.request('/cache/metrics');
   }
 
   // Utility methods
