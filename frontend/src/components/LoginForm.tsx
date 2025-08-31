@@ -160,7 +160,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           <div className={clsx('text-center text-sm', mutedTextClasses)}>
             <p>Demo credentials:</p>
             <p className="font-mono text-xs mt-1">
-              admin / admin123
+              admin / Preset Password
             </p>
           </div>
         </form>
