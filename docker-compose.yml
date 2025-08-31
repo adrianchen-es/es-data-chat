@@ -55,6 +55,7 @@ services:
       - KEYCLOAK_REALM=ai-chat
       - KEYCLOAK_CLIENT_ID=ai-chat-client
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - DEMO_ADMIN_PASSWORD=demo123
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       - keycloak
