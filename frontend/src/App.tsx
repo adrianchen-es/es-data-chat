@@ -241,6 +241,9 @@ const ChatApp: React.FC = () => {
   const handleSendMessage = useCallback(async (message: string) => {
     if (!message.trim() || isLoading || !isAuthenticated) return;
 
+    // Clear the input immediately after validation
+    setInputValue('');
+
     telemetry.trackUserAction('send_message', { messageLength: message.length });
     
     const userMessage: Message = {
