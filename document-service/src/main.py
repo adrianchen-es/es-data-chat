@@ -17,9 +17,10 @@ FastAPIInstrumentor.instrument_app(app)
 tracer = trace.get_tracer(__name__)
 
 # Configuration
-ALLOWED_EXTENSIONS = {'.pdf', '.docx', '.doc', '.pptx', '.ppt'}
+ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.docx', '.doc', '.pptx', '.ppt'}
 ALLOWED_MIME_TYPES = {
     'application/pdf',
+    'text/plain',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'application/msword'
@@ -88,9 +89,8 @@ class DocumentProcessor:
                 # Process with PyMuPDF4LLM
                 md_text = pymupdf4llm.to_markdown(
                     file_path,
-                    page_chunks=True,
-                    write_images=True,
-                    image_path=str(UPLOAD_DIR / "images"),
+                    page_chunks=False,  # Change to False to get a single string
+                    write_images=False,
                     dpi=200
                 )
                 
