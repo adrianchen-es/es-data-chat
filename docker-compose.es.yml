@@ -197,15 +197,30 @@ services:
     command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    ports:
-      - "4317:4317"
-      - "4318:4318"
+    image: ${COLLECTOR_CONTRIB_IMAGE}
+    container_name: otel-collector
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+    restart: unless-stopped
+    command: ["--config", "/etc/otelcol-config.yml" ]
+    user: 0:0
     volumes:
-      - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
-    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
-    # depends_on:
-    #   - elasticsearch
+      - ${HOST_FILESYSTEM}:/hostfs:ro
+      - ${DOCKER_SOCK}:/var/run/docker.sock:ro
+      - ${OTEL_COLLECTOR_CONFIG}:/etc/otelcol-config.yml
+    environment:
+      - HOST_FILESYSTEM
+      - ELASTIC_AGENT_OTEL
+      - ELASTIC_API_KEY
+      - ELASTIC_ENDPOINT
+      - STORAGE_DIR=/usr/share/elastic-agent
+      - OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    # network_mode: host
 
 volumes:
   es_data:
