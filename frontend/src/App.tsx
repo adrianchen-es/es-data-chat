@@ -9,7 +9,8 @@ import {
   DebugPanel, 
   WelcomeScreen, 
   MessageList, 
-  MessageInput 
+  MessageInput,
+  MockModeIndicator
 } from './components';
 import { apiService, Message, HealthStatus, SystemMetrics, UserInfo } from './services/api';
 import { telemetry } from './telemetry/otel';
@@ -52,6 +53,7 @@ const ChatApp: React.FC = () => {
   const [fullscreen, setFullscreen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [securityAlert, setSecurityAlert] = useState<string>('');
+  const [isMockMode, setIsMockMode] = useState(false);
 
   // Check authentication status on app load
   useEffect(() => {
@@ -288,8 +290,12 @@ const ChatApp: React.FC = () => {
           ...prev,
           averageResponseTime: Math.round((prev.averageResponseTime + (metadata.processingTime || 1000)) / 2)
         }));
+        
+        // Clear mock mode indicator for real responses
+        setIsMockMode(false);
       } else {
         // Fall back to mock response
+        setIsMockMode(true);
         const mockResponses = [
           `I understand you're asking about "${message}". Based on my analysis of your data, I can provide several insights. This response demonstrates the streaming functionality and would normally connect to our AI service with RAG capabilities.`,
           `Great question about "${message}"! Let me search through your documents and provide a comprehensive answer. The system is designed to provide intelligent responses based on your specific data sources and context.`,
@@ -325,6 +331,9 @@ const ChatApp: React.FC = () => {
       setSecurityAlert('');
     } catch (error: any) {
       console.error('Error sending message:', error);
+      
+      // Set mock mode indicator when API fails
+      setIsMockMode(true);
       
       let errorMessage = 'Sorry, I encountered an error. Please try again.';
       
@@ -443,6 +452,13 @@ const ChatApp: React.FC = () => {
             darkMode={darkMode}
           />
         )}
+
+        {/* Mock Mode Indicator */}
+        <MockModeIndicator
+          isVisible={isMockMode}
+          darkMode={darkMode}
+          onDismiss={() => setIsMockMode(false)}
+        />
 
         {/* Debug Panel */}
         {showDebug && (
