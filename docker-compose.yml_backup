@@ -1,6 +1,5 @@
-# docker-compose.external-es.yml
-# Override file for using external Elasticsearch
-# Use with: docker compose -f docker-compose.buildx.yml -f docker-compose.external-es.yml up -d
+# docker-compose.yml
+version: '3.8'
 
 services:
   waf:
@@ -30,6 +29,8 @@ services:
     build:
       context: ./bff-service
       dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
     environment:
       - AUTH_SERVICE_URL=http://auth-service:8003
       - AI_SERVICE_URL=http://ai-service:8000
@@ -67,9 +68,6 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_TYPE=azure
-      - OPENAI_API_VERSION=${OPENAI_API_VERSION:-2024-02-15-preview}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_BASE=${OPENAI_ENDPOINT}
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
       - AZURE_DEPLOYMENT_NAME=${AZURE_DEPLOYMENT_NAME:-gpt-4}
@@ -80,12 +78,10 @@ services:
       - ELASTICSEARCH_VERIFY_CERTS=false
       - VECTOR_SERVICE_URL=http://vector-service:8004
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-    # Remove dependency on local elasticsearch
     depends_on:
+      - elasticsearch
       - vector-service
-      # elasticsearch dependency removed
 
-  # Override Document service to use external Elasticsearch  
   document-service:
     build:
       context: ./document-service
@@ -97,8 +93,8 @@ services:
       - ELASTICSEARCH_API_KEY=${ELASTICSEARCH_API_KEY}
       - ELASTICSEARCH_VERIFY_CERTS=false
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-    # depends_on:
-    #   - elasticsearch
+    depends_on:
+      - elasticsearch
     volumes:
       - doc_uploads:/tmp/uploads
 
@@ -163,6 +159,22 @@ services:
       - POSTGRES_PASSWORD=keycloak
     volumes:
       - keycloak_db_data:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-false}
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
 
   qdrant:
     image: qdrant/qdrant:v1.7.4

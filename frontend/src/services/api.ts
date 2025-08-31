@@ -100,7 +100,7 @@ class ApiService {
   private baseUrl: string;
   private authToken: string | null = null;
 
-  constructor(baseUrl: string = '') {
+  constructor(baseUrl: string = 'http://localhost:3001') {
     this.baseUrl = baseUrl;
     this.loadAuthToken();
   }
