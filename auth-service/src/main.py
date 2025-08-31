@@ -162,16 +162,18 @@ async def login(request: LoginRequest):
             
         except Exception as keycloak_error:
             # Fallback to demo authentication for development
-            if request.username == "admin" and request.password == "admin123":
+            demo_password = os.getenv("DEMO_ADMIN_PASSWORD", "!admin@12345,")
+            if request.username == "admin" and request.password == demo_password:
                 # Generate a simple JWT token for demo
                 demo_payload = {
                     "sub": "demo-user-123",
                     "preferred_username": "admin",
                     "email": "admin@demo.com",
                     "realm_access": {"roles": ["admin", "user"]},
-                    "exp": int(time.time()) + 3600  # 1 hour from now
+                    "exp": int(time.time()) + 3600,  # 1 hour from now
+                    "iss": "demo-auth"  # Add issuer to match validation logic
                 }
-                demo_token = jwt.encode(demo_payload, "demo-secret", algorithm="HS256")
+                demo_token = jwt.encode(demo_payload, "demo-secret-key", algorithm="HS256")
                 
                 span.set_attributes({
                     "auth.username": request.username,
