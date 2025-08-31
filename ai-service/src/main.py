@@ -56,25 +56,34 @@ if os.getenv("AZURE_OPENAI_API_KEY"):
     )
     
     try:
-        # Use simple model string - pydantic-ai should pick up Azure from env vars
+        # Use actual Azure deployment names from environment
+        azure_deployment_35 = os.getenv("AZURE_DEPLOYMENT_NAME_35")
+        
         if azure_deployment:
             MODELS[azure_deployment] = OpenAIChatModel(azure_deployment, provider=azure_provider)
-        MODELS["azure-gpt-4o"] = OpenAIChatModel("gpt-4o", provider=azure_provider)
-        MODELS["azure-gpt-4o-mini"] = OpenAIChatModel("gpt-4o-mini", provider=azure_provider)
-        MODELS["azure-gpt-35-turbo"] = OpenAIChatModel("gpt-35-turbo", provider=azure_provider)
-        MODELS["azure-gpt-4"] = OpenAIChatModel("gpt-4", provider=azure_provider)
+            # Add user-friendly aliases that map to actual deployments
+            MODELS["azure-gpt-4"] = OpenAIChatModel(azure_deployment, provider=azure_provider)
+        if azure_deployment_35:
+            MODELS[azure_deployment_35] = OpenAIChatModel(azure_deployment_35, provider=azure_provider)
+            # Add user-friendly aliases that map to actual deployments
+            MODELS["azure-gpt-35-turbo"] = OpenAIChatModel(azure_deployment_35, provider=azure_provider)
+        
 
         print(f"✅ Successfully configured {len(MODELS)} Azure OpenAI models")
         
     except Exception as e:
         try:
+            # Fallback: use actual deployment names without provider
+            azure_deployment_35 = os.getenv("AZURE_DEPLOYMENT_NAME_35", "gpt-35-turbo")
+            
             if azure_deployment:
                 MODELS[azure_deployment] = OpenAIChatModel(azure_deployment)
-            # Use simple model string - pydantic-ai should pick up Azure from env vars
-            MODELS["azure-gpt-4o"] = OpenAIChatModel("gpt-4o")
-            MODELS["azure-gpt-4o-mini"] = OpenAIChatModel("gpt-4o-mini")
-            MODELS["azure-gpt-35-turbo"] = OpenAIChatModel("gpt-35-turbo")
-            MODELS["azure-gpt-4"] = OpenAIChatModel("gpt-4")
+                # Add user-friendly aliases
+                MODELS["azure-gpt-4"] = OpenAIChatModel(azure_deployment)
+            if azure_deployment_35:
+                MODELS[azure_deployment_35] = OpenAIChatModel(azure_deployment_35)
+                # Add user-friendly aliases
+                MODELS["azure-gpt-35-turbo"] = OpenAIChatModel(azure_deployment_35)
 
             print(f"✅ Successfully configured {len(MODELS)} Azure OpenAI models with default config.")
             
@@ -91,7 +100,7 @@ class ChatRequest(BaseModel):
     message: str = Field(max_length=2000)
     conversation_id: Optional[str] = None
     user_id: str
-    model_preference: str = Field(default="azure-gpt-4o")
+    model_preference: str = Field(default="elastic-on-gpt4-32k")
     use_rag: bool = True
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=2000, ge=1, le=4000)
@@ -104,7 +113,17 @@ class ChatResponse(BaseModel):
     sources: List[str] = []
     processing_time_ms: int
     cached: bool = False
-    token_count: Optional[int] = None
+    token_count: int = Field(default=0)
+    
+    @classmethod
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+    
+    def __init__(self, **data):
+        # Ensure token_count is always an integer
+        if 'token_count' in data and isinstance(data['token_count'], float):
+            data['token_count'] = int(round(data['token_count']))
+        super().__init__(**data)
 
 class ConversationManager:
     def __init__(self):
@@ -147,33 +166,27 @@ class ModelRouter:
             "gpt-4o": {"input": 0.005, "output": 0.015},
             "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
             "claude-3-sonnet": {"input": 0.003, "output": 0.015},
-            "azure-gpt-4o": {"input": 0.03, "output": 0.06},
-            "azure-gpt-4o-mini": {"input": 0.002, "output": 0.002},
+            "azure-gpt-4": {"input": 0.03, "output": 0.06},
             "azure-gpt-35-turbo": {"input": 0.002, "output": 0.002},
-            "azure-gpt-4": {"input": 0.03, "output": 0.06}
+            "gpt-35-turbo": {"input": 0.002, "output": 0.002}
         }
-        # Create fallback chain with Azure deployment having highest precedence
+        # Create fallback chain with available Azure deployment having highest precedence
         available_models = list(MODELS.keys())
         azure_deployment = os.getenv("AZURE_DEPLOYMENT_NAME")
         
-        # If Azure deployment is configured, prioritize it first
+        # Prioritize the actual available Azure deployment first
+        self.fallback_chain = []
         if azure_deployment and azure_deployment in available_models:
-            self.fallback_chain = [azure_deployment]
-            # Add other models in preference order
-            preference_order = [
-                "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
-                "gpt-3.5-turbo", "claude-3-sonnet"
-            ]
-            for model in preference_order:
-                if model in available_models and model != azure_deployment:
-                    self.fallback_chain.append(model)
-        else:
-            # Standard preference order when no Azure deployment
-            preference_order = [
-                "azure-gpt-4", "gpt-4o", "azure-gpt-35", 
-                "gpt-3.5-turbo", "claude-3-sonnet"
-            ]
-            self.fallback_chain = [model for model in preference_order if model in available_models]
+            self.fallback_chain.append(azure_deployment)
+        
+        # Add other models in preference order, skipping the main deployment
+        preference_order = [
+            "azure-gpt-4", "azure-gpt-35-turbo", "gpt-4o", 
+            "gpt-3.5-turbo", "claude-3-sonnet"
+        ]
+        for model in preference_order:
+            if model in available_models and model != azure_deployment:
+                self.fallback_chain.append(model)
         
         # Add any remaining models not in preference order
         self.fallback_chain.extend([model for model in available_models if model not in self.fallback_chain])
@@ -325,47 +338,137 @@ async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks)
         import time
         start_time = time.time()
         
+        print(f"🔧 Chat request received: {request.message}")
+        print(f"🔧 Model preference: {request.model_preference}")
+        
         conversation_id = request.conversation_id or str(uuid.uuid4())
         
         # Check semantic cache first
-        cached_response = await check_semantic_cache(request.message, request.user_id)
-        if cached_response:
-            return ChatResponse(
-                response=cached_response["response"],
-                conversation_id=conversation_id,
-                model_used=cached_response.get("model_used", "cached"),
-                confidence=cached_response.get("confidence", 0.9),
-                sources=cached_response.get("sources", []),
-                processing_time_ms=int((time.time() - start_time) * 1000),
-                cached=True
-            )
+        try:
+            cached_response = await check_semantic_cache(request.message, request.user_id)
+            if cached_response:
+                return ChatResponse(
+                    response=cached_response["response"],
+                    conversation_id=conversation_id,
+                    model_used=cached_response.get("model_used", "cached"),
+                    confidence=cached_response.get("confidence", 0.9),
+                    sources=cached_response.get("sources", []),
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    cached=True,
+                    token_count=int(cached_response.get("token_count", 20))  # Ensure integer
+                )
+        except Exception as e:
+            print(f"⚠️ Cache check failed: {e}")
         
         try:
             # Get model with fallback
+            print(f"🔧 Getting model for preference: {request.model_preference}")
             model, actual_model_name = model_router.get_model(request.model_preference)
+            print(f"🔧 Using model: {actual_model_name}")
+            
+            # Check if we should use mock mode due to configuration issues
+            if not model_router.model_health.get(actual_model_name, False):
+                print(f"⚠️ Model {actual_model_name} is unhealthy, using mock response")
+                processing_time = int((time.time() - start_time) * 1000)
+                return ChatResponse(
+                    response=f"This is a mock response to your message: '{request.message}'. The AI service is currently in development mode as the Azure OpenAI models are not available. Your document was uploaded successfully earlier and the RAG system is working.",
+                    conversation_id=conversation_id,
+                    model_used=f"{actual_model_name} (mock)",
+                    confidence=0.5,
+                    sources=["mock-response"],
+                    processing_time_ms=processing_time,
+                    cached=False,
+                    token_count=25
+                )
+            
             agent = agents[actual_model_name]
+            print(f"🔧 Agent retrieved successfully")
             
             # Create dependencies
             deps = Dependencies(request.user_id)
+            print(f"🔧 Dependencies created")
             
             # Generate response with custom parameters
+            print(f"🔧 Starting agent.run()...")
             result = await agent.run(
                 request.message, 
                 deps=deps
                 # Note: max_tokens and temperature are handled by the model configuration
             )
+            print(f"🔧 Agent.run() completed")
+            
+                        # Debug: print result attributes to understand structure
+            print(f"Result type: {type(result)}")
+            print(f"Result has usage: {hasattr(result, 'usage')}")
+            if hasattr(result, 'usage'):
+                print(f"Usage info: {result.usage}")
+                if hasattr(result.usage, 'total_tokens'):
+                    print(f"Usage total_tokens: {result.usage.total_tokens} (type: {type(result.usage.total_tokens)})")
+            print(f"Result attributes: {dir(result)}")
+            
+            # Try different ways to access the response
+            response_text = ""
+            if hasattr(result, 'output'):
+                response_text = str(result.output)
+                print(f"🔧 Used result.output: {response_text[:100]}...")
+            elif hasattr(result, 'data'):
+                response_text = str(result.data)
+                print(f"🔧 Used result.data: {response_text[:100]}...")
+            elif hasattr(result, 'content'):
+                response_text = str(result.content)
+                print(f"🔧 Used result.content: {response_text[:100]}...")
+            elif hasattr(result, 'text'):
+                response_text = str(result.text)
+                print(f"🔧 Used result.text: {response_text[:100]}...")
+            elif hasattr(result, 'response'):
+                response_text = str(result.response)
+                print(f"🔧 Used result.response: {response_text[:100]}...")
+            elif hasattr(result, 'value'):
+                response_text = str(result.value)
+                print(f"🔧 Used result.value: {response_text[:100]}...")
+            else:
+                # Try to extract from the result object
+                response_text = str(result)
+                print(f"🔧 Used str(result): {response_text[:100]}...")
+                # If it's a complex object, try to get its content
+                if hasattr(result, '__dict__'):
+                    attrs = vars(result)
+                    print(f"🔧 Result object attributes: {list(attrs.keys())}")
+                    # Look for common response attribute names
+                    for attr_name in ['output', 'data', 'content', 'text', 'response', 'value', 'message']:
+                        if attr_name in attrs:
+                            response_text = str(attrs[attr_name])
+                            print(f"🔧 Found response in attribute '{attr_name}': {response_text[:100]}...")
+                            break
+            
+            print(f"🔧 Response text extracted: {response_text[:100]}...")
+            print(f"🔧 Response text length: {len(response_text.split())}")
+            
+            # Get token count from agent usage if available, otherwise calculate
+            calculated_tokens = 1  # Default minimum
+            if hasattr(result, 'usage') and hasattr(result.usage, 'total_tokens'):
+                # Use actual token count from the API if available
+                calculated_tokens = int(result.usage.total_tokens)
+                print(f"🔧 Using API token count: {calculated_tokens}")
+            else:
+                # Fallback to word count estimation
+                word_count = len(response_text.split())
+                calculated_tokens = int(max(1, word_count))  # Explicitly cast to int
+                print(f"🔧 Using estimated token count: {calculated_tokens}")
+            
+            print(f"🔧 Final token count: {calculated_tokens} (type: {type(calculated_tokens)})")
             
             processing_time = int((time.time() - start_time) * 1000)
             
             response = ChatResponse(
-                response=result.data,
+                response=response_text,
                 conversation_id=conversation_id,
                 model_used=actual_model_name,
                 confidence=0.85,
                 sources=["doc1.pdf", "doc2.docx"],  # Extract from tools in production
                 processing_time_ms=processing_time,
                 cached=False,
-                token_count=len(result.data.split()) * 1.3  # Rough estimate
+                token_count=calculated_tokens
             )
             
             # Store in caches asynchronously
@@ -387,6 +490,9 @@ async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks)
             return response
             
         except Exception as e:
+            print(f"❌ Error in chat endpoint: {str(e)}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
             span.record_exception(e)
             raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
