@@ -184,16 +184,6 @@ services:
     command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    volumes:
-      - ./otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
-    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
-    # depends_on:
-    #   - elasticsearch
-   otel-collector:
     image: ${COLLECTOR_CONTRIB_IMAGE}
     container_name: otel-collector
     deploy:
