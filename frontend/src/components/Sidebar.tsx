@@ -1,40 +1,30 @@
 // frontend/src/components/Sidebar.tsx
 import React from 'react';
-import { X, CheckCircle, AlertCircle, MessageSquare, Clock, Database, TrendingUp, User } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, MessageSquare, Clock, Database, TrendingUp } from 'lucide-react';
 import clsx from 'clsx';
 import { HealthStatus, SystemMetrics } from '../services/api';
 
-interface SidebarProps {
-  isVisible: boolean;
+export interface SidebarProps {
+  isOpen: boolean;
   onClose: () => void;
   healthStatus: HealthStatus;
   systemMetrics: SystemMetrics;
-  user: any;
-  currentConversationId: string | null;
   darkMode: boolean;
   onClearChat: () => void;
   onToggleDebug: () => void;
   onToggleDarkMode: () => void;
-  showDebug: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  isVisible,
+  isOpen,
   onClose,
   healthStatus,
   systemMetrics,
-  user,
-  currentConversationId,
   darkMode,
   onClearChat,
   onToggleDebug,
   onToggleDarkMode,
-  showDebug,
 }) => {
-  const surfaceClasses = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
-  const textClasses = darkMode ? 'text-gray-100' : 'text-gray-900';
-  const mutedTextClasses = darkMode ? 'text-gray-400' : 'text-gray-600';
-
   const getHealthIcon = () => {
     switch (healthStatus.status) {
       case 'healthy':
@@ -53,11 +43,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
   };
 
+  const surfaceClasses = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const textClasses = darkMode ? 'text-gray-100' : 'text-gray-900';
+  const mutedTextClasses = darkMode ? 'text-gray-400' : 'text-gray-600';
+
   return (
     <div className={clsx(
       'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform lg:translate-x-0 lg:static lg:inset-0',
       surfaceClasses,
-      isVisible ? 'translate-x-0' : '-translate-x-full'
+      isOpen ? 'translate-x-0' : '-translate-x-full'
     )}>
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className={clsx('text-lg font-semibold', textClasses)}>ES Data Chat</h2>
@@ -82,9 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="text-xs space-y-1">
             {Object.entries(healthStatus.services).map(([service, status]) => (
               <div key={service} className="flex justify-between">
-                <span className={mutedTextClasses}>
-                  {service === 'api' ? 'BFF' : service}:
-                </span>
+                <span className={mutedTextClasses}>{service}:</span>
                 <span className={status ? 'text-green-500' : 'text-red-500'}>
                   {status ? '✓' : '✗'}
                 </span>
@@ -92,35 +84,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </div>
         </div>
-
-        {/* User Info */}
-        {user && (
-          <div className="space-y-2">
-            <h3 className={clsx('text-sm font-medium', textClasses)}>User</h3>
-            <div className="text-xs space-y-1">
-              <div className={mutedTextClasses}>ID: {user.user_id}</div>
-              <div className={mutedTextClasses}>Username: {user.username}</div>
-              {user.email && <div className={mutedTextClasses}>Email: {user.email}</div>}
-              {user.roles && user.roles.length > 0 && (
-                <div className={mutedTextClasses}>
-                  Roles: {user.roles.join(', ')}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Current Conversation */}
-        {currentConversationId && (
-          <div className="space-y-2">
-            <h3 className={clsx('text-sm font-medium', textClasses)}>Current Chat</h3>
-            <div className="text-xs">
-              <div className={mutedTextClasses}>
-                ID: {currentConversationId.slice(-8)}...
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Metrics */}
         <div className="space-y-2">
@@ -163,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               mutedTextClasses
             )}
           >
-            {showDebug ? 'Hide' : 'Show'} Debug
+            Toggle Debug
           </button>
           <button
             onClick={onToggleDarkMode}

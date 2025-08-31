@@ -4,7 +4,6 @@ import clsx from 'clsx';
 import { HealthStatus, SystemMetrics } from '../services/api';
 
 interface DebugPanelProps {
-  isVisible: boolean;
   healthStatus: HealthStatus;
   systemMetrics: SystemMetrics;
   lastQuery: string;
@@ -12,15 +11,12 @@ interface DebugPanelProps {
 }
 
 export const DebugPanel: React.FC<DebugPanelProps> = ({
-  isVisible,
   healthStatus,
   systemMetrics,
   lastQuery,
   darkMode,
 }) => {
   const surfaceClasses = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
-
-  if (!isVisible) return null;
 
   return (
     <div className={clsx('border-b p-3 text-sm', surfaceClasses)}>

@@ -5,27 +5,25 @@ import clsx from 'clsx';
 import { SystemMetrics } from '../services/api';
 
 interface MessageInputProps {
-  inputValue: string;
-  setInputValue: (value: string) => void;
+  value: string;
+  onValueChange: (value: string) => void;
   isLoading: boolean;
   isAuthenticated: boolean;
   systemMetrics: SystemMetrics;
   darkMode: boolean;
-  onSendMessage: () => void;
-  onFileUpload: () => void;
-  onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onSendMessage: (message: string) => void;
+  onFileUpload: (file: File) => void;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
-  inputValue,
-  setInputValue,
+  value,
+  onValueChange,
   isLoading,
   isAuthenticated,
   systemMetrics,
   darkMode,
   onSendMessage,
   onFileUpload,
-  onFileChange,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -33,10 +31,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const surfaceClasses = darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   const textClasses = darkMode ? 'text-gray-100' : 'text-gray-900';
 
+  const handleSendMessage = () => {
+    if (!value.trim() || isLoading || !isAuthenticated) return;
+    onSendMessage(value);
+  };
+
+  const handleFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onFileUpload(file);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSendMessage();
+      handleSendMessage();
     }
   };
 
@@ -52,12 +66,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <input
           type="file"
           ref={fileInputRef}
-          onChange={onFileChange}
+          onChange={handleFileChange}
           accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
           className="hidden"
         />
         <button
-          onClick={onFileUpload}
+          onClick={handleFileUpload}
           disabled={isLoading || !isAuthenticated}
           className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50"
           title={!isAuthenticated ? "Login required" : "Upload file"}
@@ -67,8 +81,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div className="flex-1">
           <textarea
             ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={value}
+            onChange={(e) => onValueChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={isAuthenticated ? "Ask a question or type a message... (⌘+K to focus, ⌘+Enter to send)" : "Please log in to start chatting..."}
             className={clsx(
@@ -88,8 +102,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           />
         </div>
         <button
-          onClick={onSendMessage}
-          disabled={!inputValue.trim() || isLoading || !isAuthenticated}
+          onClick={handleSendMessage}
+          disabled={!value.trim() || isLoading || !isAuthenticated}
           className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Send className="w-5 h-5" />
