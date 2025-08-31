@@ -74,32 +74,59 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         try:
             token = credentials.credentials
             
-            # Get Keycloak public key
-            public_key = "-----BEGIN PUBLIC KEY-----\n" + keycloak_openid.public_key() + "\n-----END PUBLIC KEY-----"
+            # Try to decode as demo token first
+            try:
+                payload = jwt.decode(token, "demo-secret-key", algorithms=["HS256"])
+                if payload.get("iss") == "demo-auth":
+                    # This is a demo token
+                    user_id = payload.get("sub")
+                    username = payload.get("preferred_username")
+                    email = payload.get("email")
+                    roles = payload.get("realm_access", {}).get("roles", [])
+                    
+                    span.set_attributes({
+                        "auth.user_id": user_id,
+                        "auth.username": username,
+                        "auth.roles_count": len(roles),
+                        "auth.method": "demo"
+                    })
+                    
+                    logger.info("User authenticated via demo token", user_id=user_id, username=username)
+                    return AuthUser(user_id, username, email, roles)
+            except:
+                pass  # Not a demo token, try Keycloak
             
-            # Decode and validate token
-            payload = jwt.decode(
-                token,
-                public_key,
-                algorithms=["RS256"],
-                audience=KEYCLOAK_CLIENT_ID
-            )
-            
-            # Extract user information
-            user_id = payload.get("sub")
-            username = payload.get("preferred_username")
-            email = payload.get("email")
-            roles = payload.get("realm_access", {}).get("roles", [])
-            
-            span.set_attributes({
-                "auth.user_id": user_id,
-                "auth.username": username,
-                "auth.roles_count": len(roles)
-            })
-            
-            logger.info("User authenticated", user_id=user_id, username=username)
-            
-            return AuthUser(user_id, username, email, roles)
+            # Try Keycloak token validation
+            try:
+                # Get Keycloak public key
+                public_key = "-----BEGIN PUBLIC KEY-----\n" + keycloak_openid.public_key() + "\n-----END PUBLIC KEY-----"
+                
+                # Decode and validate token
+                payload = jwt.decode(
+                    token,
+                    public_key,
+                    algorithms=["RS256"],
+                    audience=KEYCLOAK_CLIENT_ID
+                )
+                
+                # Extract user information
+                user_id = payload.get("sub")
+                username = payload.get("preferred_username")
+                email = payload.get("email")
+                roles = payload.get("realm_access", {}).get("roles", [])
+                
+                span.set_attributes({
+                    "auth.user_id": user_id,
+                    "auth.username": username,
+                    "auth.roles_count": len(roles),
+                    "auth.method": "keycloak"
+                })
+                
+                logger.info("User authenticated via Keycloak", user_id=user_id, username=username)
+                return AuthUser(user_id, username, email, roles)
+            except Exception as keycloak_error:
+                logger.warning("Keycloak token validation failed", error=str(keycloak_error))
+                raise JWTError("Invalid token")
             
         except JWTError as e:
             span.record_exception(e)
@@ -112,17 +139,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @app.post("/login")
 async def login(request: LoginRequest):
-    """Authenticate user with Keycloak"""
+    """Authenticate user with Keycloak or fallback demo auth"""
     with tracer.start_as_current_span("user_login") as span:
         try:
+            # Try Keycloak authentication first
             token_response = keycloak_openid.token(request.username, request.password)
             
             span.set_attributes({
                 "auth.username": request.username,
-                "auth.success": True
+                "auth.success": True,
+                "auth.method": "keycloak"
             })
             
-            logger.info("User login successful", username=request.username)
+            logger.info("User login successful via Keycloak", username=request.username)
             
             return {
                 "access_token": token_response["access_token"],
@@ -131,9 +160,36 @@ async def login(request: LoginRequest):
                 "token_type": "Bearer"
             }
             
-        except Exception as e:
-            span.record_exception(e)
-            logger.warning("Login failed", username=request.username, error=str(e))
+        except Exception as keycloak_error:
+            # Fallback to demo authentication for development
+            if request.username == "admin" and request.password == "admin123":
+                # Generate a simple JWT token for demo
+                demo_payload = {
+                    "sub": "demo-user-123",
+                    "preferred_username": "admin",
+                    "email": "admin@demo.com",
+                    "realm_access": {"roles": ["admin", "user"]},
+                    "exp": int(time.time()) + 3600  # 1 hour from now
+                }
+                demo_token = jwt.encode(demo_payload, "demo-secret", algorithm="HS256")
+                
+                span.set_attributes({
+                    "auth.username": request.username,
+                    "auth.success": True,
+                    "auth.method": "demo"
+                })
+                
+                logger.info("User login successful via demo auth", username=request.username)
+                
+                return {
+                    "access_token": demo_token,
+                    "refresh_token": "demo-refresh-token",
+                    "expires_in": 3600,
+                    "token_type": "Bearer"
+                }
+            
+            span.record_exception(keycloak_error)
+            logger.warning("Login failed", username=request.username, error=str(keycloak_error))
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid username or password"

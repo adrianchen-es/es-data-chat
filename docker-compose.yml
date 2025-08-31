@@ -30,6 +30,8 @@ services:
     build:
       context: ./bff-service
       dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
     environment:
       - AUTH_SERVICE_URL=http://auth-service:8003
       - AI_SERVICE_URL=http://ai-service:8000

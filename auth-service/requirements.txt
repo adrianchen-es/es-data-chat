@@ -1,5 +1,5 @@
 # auth-service/requirements.txt
-fastapi==0.104.1
+fastapi>=0.104.1
 uvicorn[standard]==0.24.0
 gunicorn==23.0.0
 python-keycloak==3.7.0
@@ -12,3 +12,5 @@ opentelemetry-sdk==1.36.0
 opentelemetry-instrumentation-fastapi==0.57b0
 opentelemetry-exporter-otlp-proto-grpc==1.36.0
 python-multipart==0.0.6
+python-jose[cryptography]>=3.3.0
+pyjwt>=2.6.0
