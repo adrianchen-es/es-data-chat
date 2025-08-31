@@ -53,7 +53,7 @@ push:
 		exit 1; \
 	fi
 	@echo "Pushing images to $(REGISTRY) with tag $(VERSION)..."
-	@docker-compose -f docker-compose.buildx.yml push
+	@docker compose -f docker-compose.buildx.yml push
 
 
 
@@ -103,13 +103,13 @@ dev-up-external:
 	$(COMPOSE_DEV_EXTERNAL) up -d --remove-orphans
 
 down:
-	@docker-compose down
+	@docker compose down
 
 logs:
 	@sh -c 'if [ -n "$(service)" ]; then docker compose logs -f $(service); else docker compose logs -f --tail=200; fi'
 
 ps:
-	@docker-compose ps
+	@docker compose ps
 
 
 health:
@@ -138,7 +138,7 @@ init-keycloak:
 	'
 
 clean:
-	@docker-compose down -v --remove-orphans
+	@docker compose down -v --remove-orphans
 	@docker image prune -f
 
 prune:
