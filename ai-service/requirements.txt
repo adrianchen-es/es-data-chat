@@ -3,10 +3,12 @@ fastapi==0.116.1
 uvicorn[standard]==0.24.0
 gunicorn==23.0.0
 # pin a conservative pydantic-ai without the `-slim` extras to avoid pulling heavy optional deps (temporalio, huggingface, etc.)
-pydantic-ai-slim[openai,anthropic,vertexai,cli,mcp]
+pydantic-ai-slim[openai,anthropic,vertexai,cli,mcp]>=0.8.1
 # Let FastAPI pull a compatible Starlette; avoid forcing newer starlette to prevent pydantic-ai-slim extras
 # starlette>=0.45.3
 openai>=1.54.3,<2.0.0
+httpx>=0.27.0
+pydantic>=2.0.0
 elasticsearch==8.18.1
 opentelemetry-api==1.36.0
 opentelemetry-sdk==1.36.0

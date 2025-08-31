@@ -35,6 +35,7 @@ RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -subj "/C=US/ST=CA/L=San Francisco/O=AI Chat/OU=IT/CN=localhost"
 
 FROM config AS runtime
+# TODO Switch to owasp/modsecurity-crs:nginx
 
 # Create non-root user for nginx worker processes
 RUN addgroup -g 1001 -S wafuser && \

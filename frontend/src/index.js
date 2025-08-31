@@ -1,10 +1,8 @@
+import './telemetry/otel';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import ChatApp from './App';
 import './index.css';
-
-// Initialize OpenTelemetry (commented out until dependencies are installed)
-// import './telemetry/otel';
 
 const container = document.getElementById('root');
 if (!container) {
